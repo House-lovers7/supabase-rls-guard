@@ -1,0 +1,44 @@
+name: False positive
+description: A rule flagged migration SQL that is actually safe
+labels: ['false-positive']
+body:
+  - type: input
+    id: rule
+    attributes:
+      label: Rule id
+      placeholder: 'RLS006'
+    validations:
+      required: true
+  - type: textarea
+    id: sql
+    attributes:
+      label: Migration SQL that was flagged
+      description: The smallest snippet that reproduces the false positive. Synthetic data only — no real keys or customer data.
+      render: sql
+    validations:
+      required: true
+  - type: textarea
+    id: why-safe
+    attributes:
+      label: Why this is actually safe
+      description: Explain why the flagged SQL is correct (e.g. intentionally public table, PostgreSQL semantics, a Supabase pattern). Link docs if relevant.
+    validations:
+      required: true
+  - type: dropdown
+    id: expectation
+    attributes:
+      label: What should happen instead?
+      options:
+        - Do not flag this pattern at all
+        - Lower the severity
+        - Only flag it under stricter conditions
+        - Just document how to suppress it
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      placeholder: 'supabase-rls-guard 0.1.0'
+    validations:
+      required: true

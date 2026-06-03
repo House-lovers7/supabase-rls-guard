@@ -25,6 +25,9 @@ create table public.users (id uuid primary key, email text);
 alter table public.users enable row level security;
 ```
 
+_Intentional? If a table is meant to be world-readable (public reference data),
+add it to `publicTables` — see [Tuning](#tuning-false-positives)._
+
 ### RLS002 · `rls_enabled_no_policy` · Warning · Splinter 0008
 
 RLS is enabled but no policy exists, so every API request returns zero rows. Safe
@@ -54,6 +57,10 @@ report as Warning; `email`/`phone` report as Info. Only fires when the table is
 unprotected, so properly-secured tables never trip it. Extend the keyword lists
 via `sensitiveColumns` in config.
 
+_False positive? A column name can coincidentally contain a keyword (e.g.
+`token_count`). If a flagged column isn't actually sensitive, narrow
+`sensitiveColumns` or suppress with `-- rls-guard-disable-next-line RLS004`._
+
 ### RLS005 · `broad_grant_to_anon` · Critical
 
 An explicit `GRANT … TO anon` on a table that has no RLS hands unauthenticated
@@ -80,6 +87,9 @@ always-true policies are harmless and not flagged.
 `WITH CHECK (true)` is intentionally NOT flagged** — that is the standard
 "anyone can submit" pattern (e.g. a public contact form), which only permits
 inserting new rows, not reading or modifying existing ones.
+
+_Intentional? A `SELECT USING (true)` on genuinely public reference data is a
+true-but-intended positive — allowlist the table via `publicTables`._
 
 ### RLS007 · `policy_missing_to_role` · Warning
 
@@ -117,6 +127,10 @@ creator's privileges and bypasses the querying user's RLS.
 ```sql
 alter view public.user_emails set (security_invoker = on);
 ```
+
+_Intentional? A view that is deliberately a public projection of non-sensitive
+data is a true-but-intended positive — set `security_invoker = on` anyway, or
+re-level with `"severity": { "RLS010": "warning" }`, or allowlist it._
 
 ### RLS011 · `function_search_path_mutable` · Warning · Splinter 0011
 

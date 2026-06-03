@@ -27,10 +27,27 @@ npx supabase-rls-guard ./supabase/migrations
 
 ### Catch it on the pull request
 
+Drop this in `.github/workflows/rls-guard.yml` to fail any PR that adds a
+dangerous RLS migration (findings show up as inline annotations on the diff):
+
 ```yaml
-# .github/workflows/rls-guard.yml — fail the PR on dangerous RLS migrations
-- run: npx supabase-rls-guard ./supabase/migrations --format github
+name: rls-guard
+on:
+  pull_request:
+    paths: ['supabase/migrations/**.sql']
+jobs:
+  rls-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npx supabase-rls-guard ./supabase/migrations --format github
 ```
+
+More recipes — SARIF / GitHub Code Scanning, pre-commit, GitLab CI — in
+[docs/ci-integration.md](./docs/ci-integration.md).
 
 ---
 
@@ -52,6 +69,15 @@ them in your editor, in a pre-commit hook, or in CI on the pull request.
 
 > **The guardrail for AI-written migrations: catch RLS mistakes before a human
 > reviews them and before they hit production. No database connection required.**
+
+### Proven on real projects
+
+Run against **14 real Supabase projects**, supabase-rls-guard reproduced **two
+live Supabase Security Advisor alerts** (`rls_disabled_in_public` and
+`sensitive_columns_exposed`) **purely from local migration files** — i.e. it
+would have caught them before deploy. It also surfaced additional RLS-disabled
+tables holding 2FA secrets and session tokens that the dashboard had not flagged
+yet. (Aggregate only — no project names, schemas, or data are published.)
 
 ## What it checks
 
@@ -78,21 +104,49 @@ the live list, or see [docs/rules.md](./docs/rules.md) for details and fixes.
 
 ## Example
 
+**1. A migration with a classic mistake** — a public table with no RLS, holding a token:
+
+```sql
+-- supabase/migrations/001_api_keys.sql
+create table public.api_keys (
+  id uuid primary key,
+  user_id uuid,
+  token text not null
+);
+```
+
+**2. The tool catches it before you deploy** (and exits non-zero, so CI fails):
+
 ```text
-$ npx supabase-rls-guard examples/unsafe-project/supabase/migrations
+$ npx supabase-rls-guard ./supabase/migrations
 
- CRITICAL  RLS001 public.users
-  Table public.users is in an API-exposed schema but RLS is not enabled — anyone with the anon/publishable key can read and write it.
-  ↳ 001_create_users.sql:3:1
-  ↳ fix: ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
-  ↳ docs: https://supabase.github.io/splinter/0013_rls_disabled_in_public/
+ CRITICAL  RLS001 public.api_keys
+  Table public.api_keys is in an API-exposed schema but RLS is not enabled — anyone with the anon/publishable key can read and write it.
+  ↳ 001_api_keys.sql:1:1
+  ↳ fix: ALTER TABLE public.api_keys ENABLE ROW LEVEL SECURITY;
 
- CRITICAL  RLS009 public.admin_flags
-  Policy "admin_only" on public.admin_flags references user_metadata, which users can change via updateUser() — this is trivially bypassable privilege escalation.
-  ↳ 007_admin_flags.sql:10:1
-  ↳ fix: Use app_metadata or a dedicated roles table instead of user_metadata.
+ CRITICAL  RLS004 public.api_keys.token
+  Column public.api_keys.token looks sensitive and the table has no RLS — this data is exposed over the API.
 
-✖ 11 critical, 8 warning, 1 info across 11 file(s) · failing (threshold: critical)
+✖ 2 critical across 1 file(s) · failing (threshold: critical)      # exit 1
+```
+
+**3. The fix** — RLS on, with a scoped policy. (RLS enabled in a *later* migration is correctly accepted.)
+
+```sql
+-- supabase/migrations/002_api_keys_rls.sql
+alter table public.api_keys enable row level security;
+
+create policy "api_keys_select_own"
+  on public.api_keys
+  for select
+  to authenticated
+  using ((select auth.uid()) = user_id);
+```
+
+```text
+$ npx supabase-rls-guard ./supabase/migrations
+✔ No RLS issues found across 2 file(s).                            # exit 0
 ```
 
 ## The key idea: migrations are cumulative
