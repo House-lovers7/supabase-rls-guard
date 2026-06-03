@@ -4,8 +4,8 @@ create table public.posts (
 );
 alter table public.posts enable row level security;
 
--- Dangerous: a permissive policy with USING (true) for anon lets anyone do
--- anything, defeating the point of RLS. FOR ALL with no WITH CHECK is also wrong.
+-- Dangerous: a permissive policy with USING (true) for anon lets anyone read,
+-- update, and delete every row, defeating the point of RLS.
 create policy "posts_all"
   on public.posts
   for all

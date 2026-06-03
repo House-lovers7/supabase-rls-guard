@@ -1,8 +1,8 @@
 # Supabase RLS Guard
 
-> A tiny, zero-config CLI that statically scans your Supabase migration SQL for
-> dangerous Row Level Security mistakes — **before** you push, deploy, or even
-> open the dashboard.
+> **A static, pre-deploy linter for Supabase Row Level Security.** It scans your
+> migration SQL for dangerous RLS mistakes — **before** you push, deploy, or even
+> open the dashboard. No database connection required.
 
 [![CI](https://github.com/House-lovers7/supabase-rls-guard/actions/workflows/ci.yml/badge.svg)](https://github.com/House-lovers7/supabase-rls-guard/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/supabase-rls-guard.svg)](https://www.npmjs.com/package/supabase-rls-guard)
@@ -11,6 +11,22 @@
 
 ```bash
 npx supabase-rls-guard ./supabase/migrations
+```
+
+> [!IMPORTANT]
+> **A pre-deploy guardrail, not a guarantee.** This shifts common RLS mistakes
+> left (editor / pre-commit / PR), but it is **not** a replacement for the
+> [Supabase Security Advisor / Splinter](https://supabase.com/docs/guides/database/database-linter)
+> or for manual review — those run against your live database and catch more. It
+> does static analysis of migration files only. See
+> [docs/known-limitations.md](./docs/known-limitations.md) for exactly what it
+> can and cannot detect.
+
+### Catch it on the pull request
+
+```yaml
+# .github/workflows/rls-guard.yml — fail the PR on dangerous RLS migrations
+- run: npx supabase-rls-guard ./supabase/migrations --format github
 ```
 
 ---
@@ -53,7 +69,7 @@ the live list, or see [docs/rules.md](./docs/rules.md) for details and fixes.
 | `RLS009` | Critical | A policy trusts `user_metadata` (user-editable → privilege escalation) |
 | `RLS010` | Critical | A view without `security_invoker` (bypasses the caller's RLS) |
 | `RLS011` | Warning | A function without a fixed `search_path` |
-| `RLS013` | Warning | An `UPDATE` policy with `USING` but no `WITH CHECK` |
+| `RLS013` | Info | An `UPDATE` policy omits `WITH CHECK` (Postgres reuses `USING`) — be explicit if intended |
 | `RLS018` | Warning | A migration runs `ALTER TABLE … DISABLE ROW LEVEL SECURITY` |
 
 ## Example
@@ -122,6 +138,7 @@ npx supabase-rls-guard --list-rules
 | `--disable RLS002,RLS011` | Disable rules for this run |
 | `--backend <auto\|libpg\|regex>` | Parser backend (default `auto`) |
 | `--no-color` | Disable ANSI colors |
+| `--quiet` | Suppress warnings on stderr |
 | `--list-rules` | Print all rules and exit |
 
 ### Exit codes

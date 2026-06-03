@@ -54,7 +54,7 @@
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
     "typecheck": "tsc --noEmit",
-    "selfscan": "node ./dist/cli.js examples/unsafe-project/supabase/migrations",
+    "selfscan": "node ./dist/cli.mjs examples/unsafe-project/supabase/migrations",
     "prepublishOnly": "pnpm run build"
   },
   "dependencies": {

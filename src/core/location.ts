@@ -16,7 +16,8 @@ export function skipLeadingTrivia(content: string, start: number, end = content.
     } else if (c === '/' && content[i + 1] === '*') {
       i += 2
       while (i < end && !(content[i] === '*' && content[i + 1] === '/')) i++
-      i += 2
+      // Guard the closing `*/` advance so an unterminated comment never returns > end.
+      if (i < end) i += 2
     } else {
       break
     }

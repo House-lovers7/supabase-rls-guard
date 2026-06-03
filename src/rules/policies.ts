@@ -140,13 +140,17 @@ export const policyReferencesUserMetadata: Rule = {
   },
 }
 
-/** RLS013 — an UPDATE policy with USING but no WITH CHECK leaves the write side open. */
+/**
+ * RLS013 — an UPDATE/ALL policy omits WITH CHECK. Postgres then reuses the USING
+ * expression as the new-row check, so this is usually safe; the lint is a gentle
+ * nudge to be explicit when the write constraint should differ from the read one.
+ */
 export const updatePolicyMissingWithCheck: Rule = {
   id: 'RLS013',
   name: 'update_policy_missing_with_check',
-  defaultSeverity: 'warning',
+  defaultSeverity: 'info',
   description:
-    'An UPDATE policy has USING but no WITH CHECK, so it does not constrain new row values.',
+    'An UPDATE policy omits WITH CHECK; Postgres reuses USING as the new-row check. Be explicit if the write constraint should differ.',
   docs: SUPABASE_RLS_DOCS,
   evaluate({ state, config }) {
     const findings: Finding[] = []
@@ -158,10 +162,10 @@ export const updatePolicyMissingWithCheck: Rule = {
         finding({
           ruleId: 'RLS013',
           ruleName: 'update_policy_missing_with_check',
-          severity: 'warning',
+          severity: 'info',
           target: `${p.schema}.${p.table}`,
-          message: `Policy "${p.name}" on ${p.schema}.${p.table} (${p.command.toUpperCase()}) has USING but no WITH CHECK, so it does not validate the new row values a user writes.`,
-          fix: 'Add a WITH CHECK clause mirroring the USING condition.',
+          message: `Policy "${p.name}" on ${p.schema}.${p.table} (${p.command.toUpperCase()}) omits WITH CHECK — Postgres reuses the USING expression to validate new rows. Add an explicit WITH CHECK only if the write constraint should differ from the read constraint.`,
+          fix: 'Optional: add an explicit WITH CHECK clause if new rows need a different condition than USING.',
           docs: SUPABASE_RLS_DOCS,
           loc: p.loc,
         }),

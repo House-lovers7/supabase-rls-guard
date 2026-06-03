@@ -124,11 +124,15 @@ create function public.f() returns void language plpgsql
   set search_path = '' as $$ … $$;
 ```
 
-### RLS013 · `update_policy_missing_with_check` · Warning
+### RLS013 · `update_policy_missing_with_check` · Info
 
-An `UPDATE` (or `FOR ALL`) policy with `USING` but no `WITH CHECK` does not
-constrain the new row values a user can write — a write-side hole. Add a
-`WITH CHECK` mirroring the `USING` condition.
+An `UPDATE` (or `FOR ALL`) policy with `USING` but no `WITH CHECK`. This is
+**usually safe**: when `WITH CHECK` is omitted, PostgreSQL reuses the `USING`
+expression as the new-row check, so the common ownership pattern
+(`USING ((select auth.uid()) = user_id)`) already prevents a user from
+reassigning a row to someone else. The lint is an informational nudge: add an
+explicit `WITH CHECK` only when the write constraint should differ from the read
+constraint.
 
 ### RLS018 · `disable_rls_in_migration` · Warning
 
