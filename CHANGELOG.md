@@ -25,6 +25,8 @@ caveat that, pre-1.0, minor versions may include breaking changes).
 - **`REVOKE`** is now applied when folding, so a granted-then-revoked privilege
   no longer false-positives `RLS005` (conservative: a grant is cleared only when
   the revoke fully covers it).
+- **`ALTER TABLE … ADD COLUMN`** is now folded into the table's columns, so a
+  sensitive column added in a later migration is seen by `RLS004`.
 - `docs/known-limitations.md` and per-rule false-positive/suppression notes.
 
 ### Changed

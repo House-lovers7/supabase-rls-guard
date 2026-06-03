@@ -99,6 +99,7 @@ export type Statement =
       name: string
       action: 'enable' | 'disable' | 'force' | 'noforce'
     })
+  | (Base & { kind: 'alterTableAddColumn'; schema: string; name: string; column: ColumnInfo })
   | (Base & { kind: 'createPolicy'; policy: PolicyInfo })
   | (Base & { kind: 'dropPolicy'; schema: string; table: string; name: string })
   | (Base & {

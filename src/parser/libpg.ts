@@ -243,9 +243,24 @@ function normalizeStatement(node: unknown, loc: SourceLocation, raw: string): St
       const rel = rangeVar(field(inner, 'relation'))
       const cmds: Statement[] = []
       for (const cmd of asArray(field(inner, 'cmds'))) {
-        const action = RLS_SUBTYPES[asString(field(field(cmd, 'AlterTableCmd'), 'subtype')) ?? '']
-        if (action)
+        const alterCmd = field(cmd, 'AlterTableCmd')
+        const subtype = asString(field(alterCmd, 'subtype'))
+        const action = RLS_SUBTYPES[subtype ?? '']
+        if (action) {
           cmds.push({ kind: 'alterRls', schema: rel.schema, name: rel.name, action, ...base })
+        } else if (subtype === 'AT_AddColumn') {
+          const cd = field(field(alterCmd, 'def'), 'ColumnDef')
+          const colname = asString(field(cd, 'colname'))
+          if (colname) {
+            cmds.push({
+              kind: 'alterTableAddColumn',
+              schema: rel.schema,
+              name: rel.name,
+              column: { name: colname, type: typeName(field(cd, 'typeName')) },
+              ...base,
+            })
+          }
+        }
       }
       return cmds.length > 0 ? cmds : [{ kind: 'other', ...base }]
     }

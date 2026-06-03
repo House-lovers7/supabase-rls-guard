@@ -16,6 +16,8 @@
 npx supabase-rls-guard ./supabase/migrations
 ```
 
+![Supabase RLS Guard scanning migrations: two critical findings (RLS disabled, sensitive column exposed) and a warning, failing the check with exit code 1](./assets/demo.svg)
+
 > [!IMPORTANT]
 > **A pre-deploy guardrail, not a guarantee.** This shifts common RLS mistakes
 > left (editor / pre-commit / PR), but it is **not** a replacement for the

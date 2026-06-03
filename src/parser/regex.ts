@@ -171,6 +171,25 @@ function normalize(text: string, loc: SourceLocation): Statement[] {
     return [{ kind: 'alterRls', schema: ref.schema, name: ref.name, action, ...base }]
   }
 
+  const addColumnMatch =
+    /^alter\s+table\s+(?:if\s+exists\s+)?("?[\w".]+"?)\s+add\s+column\s+(?:if\s+not\s+exists\s+)?("([^"]+)"|[\w$]+)\s+(.+)$/i.exec(
+      stripped,
+    )
+  if (addColumnMatch) {
+    const ref = parseQualifiedName(addColumnMatch[1] ?? '')
+    const name = addColumnMatch[3] ?? addColumnMatch[2] ?? ''
+    const type = (addColumnMatch[4] ?? '').trim().split(/\s+/)[0] ?? 'unknown'
+    return [
+      {
+        kind: 'alterTableAddColumn',
+        schema: ref.schema,
+        name: ref.name,
+        column: { name, type },
+        ...base,
+      },
+    ]
+  }
+
   if (/^create\s+policy\b/i.test(stripped)) {
     const policy = parsePolicy(stripped, loc)
     return policy ? [{ kind: 'createPolicy', policy, ...base }] : [{ kind: 'other', ...base }]

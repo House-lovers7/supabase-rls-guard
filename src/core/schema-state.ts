@@ -101,6 +101,13 @@ function applyStatement(state: SchemaState, stmt: Statement): void {
       }
       break
     }
+    case 'alterTableAddColumn': {
+      const table = getOrCreateTable(state, stmt.schema, stmt.name, stmt.loc)
+      if (!table.columns.some((c) => c.name === stmt.column.name)) {
+        table.columns.push(stmt.column)
+      }
+      break
+    }
     case 'createPolicy': {
       const p = stmt.policy
       const table = getOrCreateTable(state, p.schema, p.table, stmt.loc)

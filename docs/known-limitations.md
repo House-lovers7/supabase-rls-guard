@@ -28,8 +28,6 @@ These are out of scope or tracked as open issues — contributions welcome.
 - **Schema created outside migrations.** Tables/columns created via the Supabase
   dashboard or SQL editor are not in your repo, so the tool can't see them. (Run
   the Supabase Advisor for the live database.)
-- **`ALTER TABLE … ADD COLUMN`** in a later migration — a sensitive column added
-  this way is not tracked, so `RLS004` may miss it. *(tracked as an issue)*
 - **`REVOKE` is applied conservatively** — a grant is only cleared when a later
   `REVOKE` *fully* covers it (all of its grantees and privileges). A partial
   revoke leaves the grant in place (so `RLS005` keeps flagging — the safe

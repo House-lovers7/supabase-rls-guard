@@ -311,6 +311,20 @@ describe('REVOKE (#9)', () => {
   })
 })
 
+describe('ALTER TABLE ADD COLUMN (#6)', () => {
+  it('tracks a sensitive column added in a later migration (RLS004)', async () => {
+    const f = await analyze(
+      'create table public.t (id int); alter table public.t add column password text;',
+    )
+    expect(hasRule(f, 'RLS004')).toBe(true)
+  })
+  it('is handled by both parser backends', async () => {
+    const sql = 'create table public.t (id int); alter table public.t add column token text;'
+    expect(hasRule(await analyze(sql, { backend: 'libpg' }), 'RLS004')).toBe(true)
+    expect(hasRule(await analyze(sql, { backend: 'regex' }), 'RLS004')).toBe(true)
+  })
+})
+
 describe('config', () => {
   it('disables a rule via config', async () => {
     const f = await analyze('create table public.t (id int);', {
