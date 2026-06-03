@@ -43,7 +43,7 @@ jobs:
       - name: Generate SARIF for the unsafe example
         run: node dist/cli.mjs examples/unsafe-project/supabase/migrations --format sarif > unsafe.sarif || true
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: example-sarif
           path: unsafe.sarif
