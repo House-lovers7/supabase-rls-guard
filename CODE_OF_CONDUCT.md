@@ -46,7 +46,7 @@ an individual is officially representing the community in public spaces.
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
 reported to the maintainers through a
-[private GitHub Security Advisory](https://github.com/your-username/supabase-rls-guard/security/advisories/new)
+[private GitHub Security Advisory](https://github.com/House-lovers7/supabase-rls-guard/security/advisories/new)
 or by opening a confidential issue. All complaints will be reviewed and
 investigated promptly and fairly.
 

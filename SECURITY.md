@@ -5,7 +5,7 @@
 Please **do not** open a public issue for security vulnerabilities.
 
 Instead, report them privately via
-[GitHub's private vulnerability reporting](https://github.com/your-username/supabase-rls-guard/security/advisories/new).
+[GitHub's private vulnerability reporting](https://github.com/House-lovers7/supabase-rls-guard/security/advisories/new).
 We aim to acknowledge reports within 72 hours and to provide a remediation
 timeline after triage.
 

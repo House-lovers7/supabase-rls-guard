@@ -6,7 +6,7 @@ sizes are welcome — bug reports, new rules, docs, and tests especially.
 ## Getting started
 
 ```bash
-git clone https://github.com/your-username/supabase-rls-guard
+git clone https://github.com/House-lovers7/supabase-rls-guard
 cd supabase-rls-guard
 pnpm install
 pnpm test

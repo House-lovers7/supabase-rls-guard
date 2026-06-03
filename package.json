@@ -15,15 +15,15 @@
     "sarif"
   ],
   "license": "MIT",
-  "author": "supabase-rls-guard contributors",
+  "author": "House-lovers7",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/your-username/supabase-rls-guard.git"
+    "url": "git+https://github.com/House-lovers7/supabase-rls-guard.git"
   },
   "bugs": {
-    "url": "https://github.com/your-username/supabase-rls-guard/issues"
+    "url": "https://github.com/House-lovers7/supabase-rls-guard/issues"
   },
-  "homepage": "https://github.com/your-username/supabase-rls-guard#readme",
+  "homepage": "https://github.com/House-lovers7/supabase-rls-guard#readme",
   "type": "module",
   "bin": {
     "supabase-rls-guard": "./dist/cli.mjs",

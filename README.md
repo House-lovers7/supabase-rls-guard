@@ -4,7 +4,7 @@
 > dangerous Row Level Security mistakes — **before** you push, deploy, or even
 > open the dashboard.
 
-[![CI](https://github.com/your-username/supabase-rls-guard/actions/workflows/ci.yml/badge.svg)](https://github.com/your-username/supabase-rls-guard/actions/workflows/ci.yml)
+[![CI](https://github.com/House-lovers7/supabase-rls-guard/actions/workflows/ci.yml/badge.svg)](https://github.com/House-lovers7/supabase-rls-guard/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/supabase-rls-guard.svg)](https://www.npmjs.com/package/supabase-rls-guard)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Node](https://img.shields.io/node/v/supabase-rls-guard.svg)](https://nodejs.org)
@@ -217,6 +217,6 @@ same class of checks left, to before you ship.
 
 ## License
 
-[MIT](./LICENSE) © supabase-rls-guard contributors.
+[MIT](./LICENSE) © House-lovers7.
 
 This project is independent and not affiliated with or endorsed by Supabase Inc.

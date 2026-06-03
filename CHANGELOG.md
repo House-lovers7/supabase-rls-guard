@@ -31,5 +31,5 @@ Initial release.
 - GitHub Actions workflows for CI, self-scan (SARIF upload), and Trusted
   Publishing releases; examples, and full docs.
 
-[Unreleased]: https://github.com/your-username/supabase-rls-guard/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/your-username/supabase-rls-guard/releases/tag/v0.1.0
+[Unreleased]: https://github.com/House-lovers7/supabase-rls-guard/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/House-lovers7/supabase-rls-guard/releases/tag/v0.1.0
