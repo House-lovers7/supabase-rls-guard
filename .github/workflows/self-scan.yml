@@ -1,0 +1,49 @@
+name: Self-scan
+
+# Dogfooding: prove the built CLI behaves correctly end-to-end on every push —
+# the safe example must pass, the unsafe example must fail — and publish a SARIF
+# artifact of the unsafe example as a demonstration.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  self-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+      - name: Safe example must pass (exit 0)
+        run: node dist/cli.mjs examples/safe-project/supabase/migrations
+
+      - name: Unsafe example must fail (exit 1)
+        run: |
+          if node dist/cli.mjs examples/unsafe-project/supabase/migrations; then
+            echo "::error::expected the unsafe example to fail, but it passed"
+            exit 1
+          else
+            echo "unsafe example failed as expected"
+          fi
+
+      - name: Generate SARIF for the unsafe example
+        run: node dist/cli.mjs examples/unsafe-project/supabase/migrations --format sarif > unsafe.sarif || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: example-sarif
+          path: unsafe.sarif

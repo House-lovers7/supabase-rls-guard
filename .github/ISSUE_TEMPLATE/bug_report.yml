@@ -1,0 +1,33 @@
+name: Bug report
+description: A false positive, false negative, or crash
+labels: ['bug']
+body:
+  - type: textarea
+    id: sql
+    attributes:
+      label: Minimal migration SQL
+      description: The smallest `.sql` snippet that reproduces the behavior. Use synthetic data only — no real keys or customer data.
+      render: sql
+    validations:
+      required: true
+  - type: input
+    id: command
+    attributes:
+      label: Command you ran
+      placeholder: npx supabase-rls-guard ./supabase/migrations
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs actual
+      description: What did you expect to happen, and what actually happened? Paste the output.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      placeholder: 'supabase-rls-guard 0.1.0, Node 22.x'
+    validations:
+      required: true

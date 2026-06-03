@@ -1,0 +1,12 @@
+node_modules/
+dist/
+coverage/
+*.log
+*.tsbuildinfo
+.DS_Store
+.idea/
+.vscode/
+*.sarif
+!examples/**/*.sarif
+.env
+.env.*

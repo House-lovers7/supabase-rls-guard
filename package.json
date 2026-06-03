@@ -1,0 +1,75 @@
+{
+  "name": "supabase-rls-guard",
+  "version": "0.1.0",
+  "description": "A tiny, zero-DB CLI that statically scans Supabase migration SQL for dangerous Row Level Security mistakes before you ship.",
+  "keywords": [
+    "supabase",
+    "rls",
+    "row-level-security",
+    "postgres",
+    "security",
+    "linter",
+    "static-analysis",
+    "migrations",
+    "cli",
+    "sarif"
+  ],
+  "license": "MIT",
+  "author": "supabase-rls-guard contributors",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/your-username/supabase-rls-guard.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-username/supabase-rls-guard/issues"
+  },
+  "homepage": "https://github.com/your-username/supabase-rls-guard#readme",
+  "type": "module",
+  "bin": {
+    "supabase-rls-guard": "./dist/cli.mjs",
+    "rlsguard": "./dist/cli.mjs"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "packageManager": "pnpm@9.15.9",
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "typecheck": "tsc --noEmit",
+    "selfscan": "node ./dist/cli.js examples/unsafe-project/supabase/migrations",
+    "prepublishOnly": "pnpm run build"
+  },
+  "dependencies": {
+    "citty": "^0.2.2",
+    "cosmiconfig": "^9.0.1",
+    "libpg-query": "^17.7.3",
+    "picocolors": "^1.1.1"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.3",
+    "@biomejs/biome": "^2.4.16",
+    "@types/node": "^22.12.0",
+    "publint": "^0.3.21",
+    "tsdown": "^0.22.1",
+    "typescript": "^5.7.0",
+    "vitest": "^4.1.8"
+  }
+}

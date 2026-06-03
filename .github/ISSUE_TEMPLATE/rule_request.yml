@@ -1,0 +1,39 @@
+name: Rule request
+description: Propose a new RLS / Supabase security check
+labels: ['rule-request']
+body:
+  - type: textarea
+    id: pattern
+    attributes:
+      label: Dangerous pattern
+      description: What insecure migration pattern should the tool catch? Show example SQL.
+      render: sql
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why it is dangerous
+      description: What is the security impact? Link to Supabase docs or a Splinter lint if relevant.
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Suggested severity
+      options: [Critical, Warning, Info]
+    validations:
+      required: true
+  - type: textarea
+    id: fix
+    attributes:
+      label: Suggested fix
+      description: The SQL or guidance the finding should recommend.
+    validations:
+      required: true
+  - type: checkboxes
+    id: static
+    attributes:
+      label: Detectability
+      options:
+        - label: This can be detected from migration SQL alone (no live database required)
