@@ -66,10 +66,10 @@
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.3",
     "@biomejs/biome": "^2.4.16",
-    "@types/node": "^22.12.0",
+    "@types/node": "^25.9.1",
     "publint": "^0.3.21",
     "tsdown": "^0.22.1",
-    "typescript": "^5.7.0",
+    "typescript": "^6.0.3",
     "vitest": "^4.1.8"
   }
 }
