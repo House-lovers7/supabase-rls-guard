@@ -23,10 +23,17 @@ export const policyUsingTrue: Rule = {
   evaluate({ state, config }) {
     const findings: Finding[] = []
     for (const p of livePolicies(state)) {
-      if (!p.permissive || (!p.usingAlwaysTrue && !p.checkAlwaysTrue)) continue
+      if (!p.permissive) continue
+      // USING (true) exposes existing rows on read/affect commands; INSERT has no USING.
+      const dangerousUsing = p.usingAlwaysTrue && p.command !== 'insert'
+      // WITH CHECK (true) on INSERT is the standard "anyone can submit" pattern
+      // (e.g. a public contact form) and is intentionally NOT flagged here; on
+      // UPDATE/ALL it lets a user rewrite rows to arbitrary values.
+      const dangerousCheck = p.checkAlwaysTrue && (p.command === 'update' || p.command === 'all')
+      if (!dangerousUsing && !dangerousCheck) continue
       if (isAllowlisted(config, p.schema, p.table)) continue
       const untrusted = appliesToUntrusted(p.roles)
-      const clause = p.usingAlwaysTrue ? 'USING (true)' : 'WITH CHECK (true)'
+      const clause = dangerousUsing ? 'USING (true)' : 'WITH CHECK (true)'
       findings.push(
         finding({
           ruleId: 'RLS006',

@@ -71,6 +71,12 @@ A permissive policy with an always-true predicate (`USING (true)`,
 Critical when it targets `anon`/`public`, Warning otherwise. Restrictive
 always-true policies are harmless and not flagged.
 
+`USING (true)` is evaluated for `SELECT`/`UPDATE`/`DELETE`/`ALL`; a
+`WITH CHECK (true)` on `UPDATE`/`ALL` is also flagged. An **`INSERT` policy with
+`WITH CHECK (true)` is intentionally NOT flagged** — that is the standard
+"anyone can submit" pattern (e.g. a public contact form), which only permits
+inserting new rows, not reading or modifying existing ones.
+
 ### RLS007 · `policy_missing_to_role` · Warning
 
 A policy with no `TO` clause (or `TO public`) applies to every role — including

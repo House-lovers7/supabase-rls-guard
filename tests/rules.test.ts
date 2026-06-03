@@ -101,6 +101,18 @@ describe('RLS006 rls_policy_always_true', () => {
     )
     expect(hasRule(f, 'RLS006')).toBe(false)
   })
+  it('does NOT flag an INSERT policy with WITH CHECK (true) (public submission form)', async () => {
+    const f = await analyze(
+      'create table public.t (id int); alter table public.t enable row level security; create policy p on public.t for insert to anon with check (true);',
+    )
+    expect(hasRule(f, 'RLS006')).toBe(false)
+  })
+  it('flags a FOR ALL policy with WITH CHECK (true)', async () => {
+    const f = await analyze(
+      'create table public.t (id int); alter table public.t enable row level security; create policy p on public.t for all to anon with check (true);',
+    )
+    expect(hasRule(f, 'RLS006')).toBe(true)
+  })
 })
 
 describe('RLS007 policy_missing_to_role', () => {
