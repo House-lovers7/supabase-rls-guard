@@ -1,6 +1,6 @@
 # Rules
 
-Supabase RLS Guard ships 13 rules. Where a rule corresponds to a check in
+Supabase RLS Guard ships 14 rules. Where a rule corresponds to a check in
 Supabase's official [Splinter](https://github.com/supabase/splinter) linter, the
 Splinter code is noted so you can cross-reference the dashboard advisor.
 
@@ -133,6 +133,13 @@ expression as the new-row check, so the common ownership pattern
 reassigning a row to someone else. The lint is an informational nudge: add an
 explicit `WITH CHECK` only when the write constraint should differ from the read
 constraint.
+
+### RLS017 · `multiple_permissive_policies` · Warning · Splinter 0006
+
+Two or more **permissive** policies apply to the same role and command. Postgres
+evaluates and OR-s every permissive policy on each matching row, so overlapping
+policies are a performance footgun. Merge them into a single policy, or make some
+`RESTRICTIVE`. (Restrictive policies are AND-ed and are not counted here.)
 
 ### RLS018 · `disable_rls_in_migration` · Warning
 

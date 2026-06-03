@@ -194,6 +194,36 @@ describe('RLS013 update_policy_missing_with_check', () => {
   })
 })
 
+describe('RLS017 multiple_permissive_policies', () => {
+  const setup =
+    'create table public.t (id int, owner_id uuid); alter table public.t enable row level security;'
+
+  it('fires for two permissive policies on the same role and command', async () => {
+    const f = await analyze(
+      `${setup} create policy a on public.t for select to authenticated using ((select auth.uid()) = id); create policy b on public.t for select to authenticated using ((select auth.uid()) = owner_id);`,
+    )
+    expect(hasRule(f, 'RLS017')).toBe(true)
+  })
+  it('does not fire when policies cover different commands', async () => {
+    const f = await analyze(
+      `${setup} create policy a on public.t for select to authenticated using ((select auth.uid()) = id); create policy b on public.t for insert to authenticated with check ((select auth.uid()) = id);`,
+    )
+    expect(hasRule(f, 'RLS017')).toBe(false)
+  })
+  it('does not fire for a single policy', async () => {
+    const f = await analyze(
+      `${setup} create policy a on public.t for select to authenticated using ((select auth.uid()) = id);`,
+    )
+    expect(hasRule(f, 'RLS017')).toBe(false)
+  })
+  it('reports two FOR ALL policies once, not once per command', async () => {
+    const f = await analyze(
+      `${setup} create policy a on public.t for all to authenticated using ((select auth.uid()) = id); create policy b on public.t for all to authenticated using ((select auth.uid()) = owner_id);`,
+    )
+    expect(f.filter((x) => x.ruleId === 'RLS017')).toHaveLength(1)
+  })
+})
+
 describe('RLS018 disable_rls_in_migration', () => {
   it('fires when a migration disables RLS', async () => {
     const f = await analyze(

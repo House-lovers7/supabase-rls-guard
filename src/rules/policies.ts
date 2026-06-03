@@ -1,5 +1,7 @@
-import type { Finding, PolicyInfo, Rule, SchemaState } from '../core/types.js'
+import type { Finding, PolicyCommand, PolicyInfo, Rule, SchemaState } from '../core/types.js'
 import { finding, isAllowlisted, SUPABASE_RLS_DOCS, splinterDocs } from './util.js'
+
+const DML_COMMANDS: PolicyCommand[] = ['select', 'insert', 'update', 'delete']
 
 function* livePolicies(state: SchemaState): Generator<PolicyInfo> {
   for (const t of state.tables.values()) {
@@ -170,6 +172,67 @@ export const updatePolicyMissingWithCheck: Rule = {
           loc: p.loc,
         }),
       )
+    }
+    return findings
+  },
+}
+
+/**
+ * RLS017 — two or more permissive policies overlap on the same role and command.
+ * Postgres evaluates (ORs) every permissive policy on each matching row, so
+ * overlapping policies are a performance footgun (same family as RLS008).
+ */
+export const multiplePermissivePolicies: Rule = {
+  id: 'RLS017',
+  name: 'multiple_permissive_policies',
+  defaultSeverity: 'warning',
+  splinter: '0006',
+  description: 'Multiple permissive policies for the same role and command are OR-ed on every row.',
+  docs: splinterDocs('0006_multiple_permissive_policies'),
+  evaluate({ state, config }) {
+    const findings: Finding[] = []
+    for (const t of state.tables.values()) {
+      if (t.dropped || isAllowlisted(config, t.schema, t.name)) continue
+
+      // Bucket permissive policies by `${command}|${role}` (expanding `all`).
+      const buckets = new Map<string, PolicyInfo[]>()
+      for (const p of t.policies) {
+        if (!p.permissive) continue
+        const commands = p.command === 'all' ? DML_COMMANDS : [p.command]
+        for (const cmd of commands) {
+          for (const role of p.roles) {
+            const key = `${cmd}|${role}`
+            const arr = buckets.get(key) ?? []
+            if (!arr.some((q) => q.name === p.name)) arr.push(p)
+            buckets.set(key, arr)
+          }
+        }
+      }
+
+      // Report once per (role, set of overlapping policy names) — two `all`
+      // policies overlap on every command but are a single problem.
+      const seen = new Set<string>()
+      for (const [key, policies] of buckets) {
+        if (policies.length < 2) continue
+        const role = key.split('|')[1] ?? 'public'
+        const names = policies.map((p) => p.name).sort()
+        const dedupKey = `${role}|${names.join(',')}`
+        if (seen.has(dedupKey)) continue
+        seen.add(dedupKey)
+        const last = policies[policies.length - 1]
+        findings.push(
+          finding({
+            ruleId: 'RLS017',
+            ruleName: 'multiple_permissive_policies',
+            severity: 'warning',
+            target: `${t.schema}.${t.name}`,
+            message: `Table ${t.schema}.${t.name} has ${names.length} permissive policies for role "${role}" overlapping on the same command (${names.map((n) => `"${n}"`).join(', ')}). Postgres evaluates (ORs) all of them on every matching row.`,
+            fix: 'Merge the overlapping permissive policies into one, or make some RESTRICTIVE.',
+            docs: splinterDocs('0006_multiple_permissive_policies'),
+            loc: (last ?? policies[0])?.loc ?? t.definedAt,
+          }),
+        )
+      }
     }
     return findings
   },

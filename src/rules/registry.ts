@@ -3,6 +3,7 @@ import { broadGrantToAnon } from './grants.js'
 import { functionSearchPathMutable, securityDefinerView } from './objects.js'
 import {
   authUidNotWrapped,
+  multiplePermissivePolicies,
   policyMissingRole,
   policyReferencesUserMetadata,
   policyUsingTrue,
@@ -30,6 +31,7 @@ export const ALL_RULES: Rule[] = [
   securityDefinerView, // RLS010
   functionSearchPathMutable, // RLS011
   updatePolicyMissingWithCheck, // RLS013
+  multiplePermissivePolicies, // RLS017
   disableRlsInMigration, // RLS018
 ]
 

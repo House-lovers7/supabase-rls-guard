@@ -1,8 +1,11 @@
 # Supabase RLS Guard
 
-> **A static, pre-deploy linter for Supabase Row Level Security.** It scans your
-> migration SQL for dangerous RLS mistakes — **before** you push, deploy, or even
-> open the dashboard. No database connection required.
+> **Static pre-deploy linter for Supabase Row Level Security.** Catch missing RLS,
+> unsafe policies, risky `anon` grants, and insecure views in your migration SQL —
+> **before** they reach production. No database connection required.
+>
+> Built for AI-assisted development, where it's easy to ship a migration that
+> forgets RLS.
 
 [![CI](https://github.com/House-lovers7/supabase-rls-guard/actions/workflows/ci.yml/badge.svg)](https://github.com/House-lovers7/supabase-rls-guard/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/supabase-rls-guard.svg)](https://www.npmjs.com/package/supabase-rls-guard)
@@ -52,7 +55,7 @@ them in your editor, in a pre-commit hook, or in CI on the pull request.
 
 ## What it checks
 
-13 rules, aligned with Supabase's official [Splinter](https://github.com/supabase/splinter)
+14 rules, aligned with Supabase's official [Splinter](https://github.com/supabase/splinter)
 lint catalog where they overlap. Run `npx supabase-rls-guard --list-rules` for
 the live list, or see [docs/rules.md](./docs/rules.md) for details and fixes.
 
@@ -70,6 +73,7 @@ the live list, or see [docs/rules.md](./docs/rules.md) for details and fixes.
 | `RLS010` | Critical | A view without `security_invoker` (bypasses the caller's RLS) |
 | `RLS011` | Warning | A function without a fixed `search_path` |
 | `RLS013` | Info | An `UPDATE` policy omits `WITH CHECK` (Postgres reuses `USING`) — be explicit if intended |
+| `RLS017` | Warning | Multiple permissive policies for the same role + command (OR-ed on every row) |
 | `RLS018` | Warning | A migration runs `ALTER TABLE … DISABLE ROW LEVEL SECURITY` |
 
 ## Example

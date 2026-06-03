@@ -7,6 +7,28 @@ caveat that, pre-1.0, minor versions may include breaking changes).
 
 ## [Unreleased]
 
+### Added
+
+- **RLS017** (`multiple_permissive_policies`, Splinter 0006): flags two or more
+  permissive policies that overlap on the same role and command.
+- `docs/known-limitations.md` documenting what the tool can and cannot detect.
+
+### Changed
+
+- **RLS006**: no longer flags an `INSERT` policy with `WITH CHECK (true)` (the
+  standard "anyone can submit" form); only read/affect always-true predicates fire.
+- **RLS013**: corrected to match PostgreSQL semantics — when `WITH CHECK` is
+  omitted, `USING` is reused as the new-row check, so this is usually safe.
+  Re-leveled from Warning to Info with accurate wording.
+- README now leads as a "static pre-deploy linter" with an explicit
+  "guardrail, not a guarantee" scope note.
+
+### Fixed
+
+- `skipLeadingTrivia` no longer returns an offset past the end on an unterminated
+  block comment.
+- `pnpm selfscan` script now points at the real build output (`dist/cli.mjs`).
+
 ## [0.1.0]
 
 Initial release.
