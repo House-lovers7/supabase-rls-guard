@@ -11,6 +11,9 @@ caveat that, pre-1.0, minor versions may include breaking changes).
 
 - **RLS017** (`multiple_permissive_policies`, Splinter 0006): flags two or more
   permissive policies that overlap on the same role and command.
+- **RLS005** now also detects schema-wide grants
+  (`GRANT … ON ALL TABLES IN SCHEMA … TO anon`), which apply to every table in
+  the schema, including those created in later migrations.
 - `docs/known-limitations.md` documenting what the tool can and cannot detect.
 
 ### Changed

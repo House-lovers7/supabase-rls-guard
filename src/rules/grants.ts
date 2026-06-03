@@ -24,15 +24,21 @@ export const broadGrantToAnon: Rule = {
     const findings: Finding[] = []
     for (const t of exposedTables(state)) {
       if (t.rlsEnabled || isAllowlisted(config, t.schema, t.name)) continue
-      const grant = t.grants.find((g) => grantsAccessToAnon(g.privileges, g.grantees))
+      // A direct table grant, or a `GRANT … ON ALL TABLES IN SCHEMA` covering it.
+      const tableGrant = t.grants.find((g) => grantsAccessToAnon(g.privileges, g.grantees))
+      const schemaGrant = state.schemaGrants.find(
+        (g) => g.schema === t.schema && grantsAccessToAnon(g.privileges, g.grantees),
+      )
+      const grant = tableGrant ?? schemaGrant
       if (!grant) continue
+      const via = tableGrant ? '' : ' (via GRANT … ON ALL TABLES IN SCHEMA)'
       findings.push(
         finding({
           ruleId: 'RLS005',
           ruleName: 'broad_grant_to_anon',
           severity: 'critical',
           target: `${t.schema}.${t.name}`,
-          message: `Privileges are granted to "anon" on ${t.schema}.${t.name}, which has no RLS — unauthenticated users get direct access.`,
+          message: `Privileges are granted to "anon" on ${t.schema}.${t.name}${via}, which has no RLS — unauthenticated users get direct access.`,
           fix: `ALTER TABLE ${t.schema}.${t.name} ENABLE ROW LEVEL SECURITY; -- and scope grants/policies appropriately`,
           docs: SUPABASE_RLS_DOCS,
           loc: grant.loc,

@@ -80,6 +80,18 @@ describe('RLS005 broad_grant_to_anon', () => {
     )
     expect(hasRule(f, 'RLS005')).toBe(false)
   })
+  it('fires for GRANT ... ON ALL TABLES IN SCHEMA ... TO anon on an unprotected table', async () => {
+    const f = await analyze(
+      'create table public.t (id int); grant select on all tables in schema public to anon;',
+    )
+    expect(hasRule(f, 'RLS005')).toBe(true)
+  })
+  it('GRANT ON ALL TABLES is found by both parser backends', async () => {
+    const sql =
+      'create table public.t (id int); grant select on all tables in schema public to anon;'
+    expect(hasRule(await analyze(sql, { backend: 'libpg' }), 'RLS005')).toBe(true)
+    expect(hasRule(await analyze(sql, { backend: 'regex' }), 'RLS005')).toBe(true)
+  })
 })
 
 describe('RLS006 rls_policy_always_true', () => {

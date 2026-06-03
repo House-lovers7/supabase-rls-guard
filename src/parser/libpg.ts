@@ -228,12 +228,10 @@ function normalizeStatement(node: unknown, loc: SourceLocation, raw: string): St
     case 'CreatePolicyStmt':
       return [{ kind: 'createPolicy', policy: normalizePolicy(inner, loc), ...base }]
     case 'GrantStmt': {
-      if (
-        asString(field(inner, 'objtype')) !== 'OBJECT_TABLE' ||
-        asString(field(inner, 'targtype')) !== 'ACL_TARGET_OBJECT'
-      ) {
+      if (asString(field(inner, 'objtype')) !== 'OBJECT_TABLE') {
         return [{ kind: 'other', ...base }]
       }
+      const targtype = asString(field(inner, 'targtype'))
       const privList = field(inner, 'privileges')
       const privileges: string[] | 'all' =
         privList === undefined
@@ -241,16 +239,35 @@ function normalizeStatement(node: unknown, loc: SourceLocation, raw: string): St
           : asArray(privList)
               .map((p) => asString(field(field(p, 'AccessPriv'), 'priv_name')))
               .filter((p): p is string => p !== undefined)
-      return [
-        {
-          kind: 'grant',
-          isGrant: field(inner, 'is_grant') === true,
-          privileges,
-          objects: asArray(field(inner, 'objects')).map((o) => rangeVar(field(o, 'RangeVar'))),
-          grantees: asArray(field(inner, 'grantees')).map(roleName),
-          ...base,
-        },
-      ]
+      const isGrant = field(inner, 'is_grant') === true
+      const grantees = asArray(field(inner, 'grantees')).map(roleName)
+
+      if (targtype === 'ACL_TARGET_OBJECT') {
+        return [
+          {
+            kind: 'grant',
+            isGrant,
+            privileges,
+            objects: asArray(field(inner, 'objects')).map((o) => rangeVar(field(o, 'RangeVar'))),
+            grantees,
+            ...base,
+          },
+        ]
+      }
+      if (targtype === 'ACL_TARGET_ALL_IN_SCHEMA') {
+        // `objects` here are schema-name Strings, not RangeVars.
+        return [
+          {
+            kind: 'grantAllInSchema',
+            isGrant,
+            privileges,
+            schemas: stringValues(field(inner, 'objects')),
+            grantees,
+            ...base,
+          },
+        ]
+      }
+      return [{ kind: 'other', ...base }]
     }
     case 'ViewStmt': {
       const rel = rangeVar(field(inner, 'view'))

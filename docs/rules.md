@@ -57,11 +57,15 @@ via `sensitiveColumns` in config.
 ### RLS005 · `broad_grant_to_anon` · Critical
 
 An explicit `GRANT … TO anon` on a table that has no RLS hands unauthenticated
-users direct access.
+users direct access. This also covers schema-wide grants
+(`GRANT … ON ALL TABLES IN SCHEMA public TO anon`), which apply to every table in
+the schema — including tables created in later migrations.
 
 ```sql
 -- ✗ flagged (no RLS on public.public_notes)
 grant all on public.public_notes to anon;
+-- ✗ also flagged for every un-RLS'd table in public
+grant select on all tables in schema public to anon;
 ```
 
 ### RLS006 · `rls_policy_always_true` · Critical / Warning · Splinter 0024

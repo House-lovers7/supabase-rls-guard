@@ -94,6 +94,13 @@ export type Statement =
       objects: TableRef[]
       grantees: string[]
     })
+  | (Base & {
+      kind: 'grantAllInSchema'
+      isGrant: boolean
+      privileges: string[] | 'all'
+      schemas: string[]
+      grantees: string[]
+    })
   | (Base & { kind: 'createView'; schema: string; name: string; securityInvoker: boolean })
   | (Base & {
       kind: 'createFunction'
@@ -111,6 +118,14 @@ export type Statement =
 // ---------------------------------------------------------------------------
 
 export interface GrantState {
+  privileges: string[] | 'all'
+  grantees: string[]
+  loc: SourceLocation
+}
+
+/** A `GRANT … ON ALL TABLES IN SCHEMA <schema> …` — applies to every table in the schema. */
+export interface SchemaGrantState {
+  schema: string
   privileges: string[] | 'all'
   grantees: string[]
   loc: SourceLocation
@@ -162,6 +177,8 @@ export interface SchemaState {
   exposedSchemas: string[]
   /** Every `ALTER TABLE ... DISABLE ROW LEVEL SECURITY` seen, in order (for RLS018). */
   rlsDisabledEvents: RlsToggleEvent[]
+  /** `GRANT … ON ALL TABLES IN SCHEMA …` grants, applied to every table in the schema. */
+  schemaGrants: SchemaGrantState[]
 }
 
 // ---------------------------------------------------------------------------

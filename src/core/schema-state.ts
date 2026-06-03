@@ -22,6 +22,7 @@ export function createEmptyState(exposedSchemas: string[]): SchemaState {
     schemas: new Set(['public']),
     exposedSchemas,
     rlsDisabledEvents: [],
+    schemaGrants: [],
   }
 }
 
@@ -107,6 +108,19 @@ function applyStatement(state: SchemaState, stmt: Statement): void {
       for (const obj of stmt.objects) {
         const table = getOrCreateTable(state, obj.schema, obj.name, stmt.loc)
         table.grants.push({ privileges: stmt.privileges, grantees: stmt.grantees, loc: stmt.loc })
+      }
+      break
+    }
+    case 'grantAllInSchema': {
+      if (!stmt.isGrant) break
+      for (const schema of stmt.schemas) {
+        state.schemas.add(schema)
+        state.schemaGrants.push({
+          schema,
+          privileges: stmt.privileges,
+          grantees: stmt.grantees,
+          loc: stmt.loc,
+        })
       }
       break
     }

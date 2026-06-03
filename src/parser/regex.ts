@@ -179,6 +179,36 @@ function normalize(text: string, loc: SourceLocation): Statement[] {
     ]
   }
 
+  const grantAllMatch =
+    /^grant\s+([\s\S]+?)\s+on\s+all\s+tables\s+in\s+schema\s+([\w",\s]+?)\s+to\s+([\s\S]+)$/i.exec(
+      stripped,
+    )
+  if (grantAllMatch) {
+    const privText = (grantAllMatch[1] ?? '').toLowerCase()
+    return [
+      {
+        kind: 'grantAllInSchema',
+        isGrant: true,
+        privileges: /\ball\b/.test(privText)
+          ? 'all'
+          : privText
+              .split(',')
+              .map((p) => p.trim())
+              .filter(Boolean),
+        schemas: (grantAllMatch[2] ?? '')
+          .split(',')
+          .map((s) => s.trim().replace(/^"|"$/g, ''))
+          .filter(Boolean),
+        grantees: (grantAllMatch[3] ?? '')
+          .replace(/\bwith\s+grant\s+option\b/i, '')
+          .split(',')
+          .map((r) => r.trim().replace(/^"|"$/g, ''))
+          .filter(Boolean),
+        ...base,
+      },
+    ]
+  }
+
   const grantMatch =
     /^grant\s+([\s\S]+?)\s+on\s+(?:table\s+)?("?[\w".]+"?)\s+to\s+([\s\S]+)$/i.exec(stripped)
   if (grantMatch) {
