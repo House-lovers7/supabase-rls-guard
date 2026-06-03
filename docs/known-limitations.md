@@ -30,12 +30,10 @@ These are out of scope or tracked as open issues — contributions welcome.
   the Supabase Advisor for the live database.)
 - **`ALTER TABLE … ADD COLUMN`** in a later migration — a sensitive column added
   this way is not tracked, so `RLS004` may miss it. *(tracked as an issue)*
-- **`ALTER POLICY`** — only `CREATE POLICY` is modeled; later loosening of a
-  policy (e.g. to `USING (true)`) is not detected. *(tracked as an issue)*
-- **`REVOKE`** — grants are accumulated but never subtracted, so a granted-then-
-  revoked privilege may still be reported. *(tracked as an issue)*
-- **Views/tables exposing `auth.users`** (Splinter `0002`) — not yet a rule.
-  *(tracked as an issue)*
+- **`REVOKE` is applied conservatively** — a grant is only cleared when a later
+  `REVOKE` *fully* covers it (all of its grantees and privileges). A partial
+  revoke leaves the grant in place (so `RLS005` keeps flagging — the safe
+  direction).
 - **`CREATE TABLE AS`** — the resulting column list is unknown, so column-level
   rules can't inspect it.
 - **Dynamically generated SQL** — policies created inside `DO $$ … EXECUTE … $$`

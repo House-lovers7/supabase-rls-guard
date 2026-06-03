@@ -1,11 +1,12 @@
 import type { Finding, Rule, RuleContext, RuleMeta } from '../core/types.js'
 import { broadGrantToAnon } from './grants.js'
-import { functionSearchPathMutable, securityDefinerView } from './objects.js'
+import { authUsersExposed, functionSearchPathMutable, securityDefinerView } from './objects.js'
 import {
   authUidNotWrapped,
   multiplePermissivePolicies,
   policyMissingRole,
   policyReferencesUserMetadata,
+  policyUsesAuthRole,
   policyUsingTrue,
   updatePolicyMissingWithCheck,
 } from './policies.js'
@@ -31,6 +32,8 @@ export const ALL_RULES: Rule[] = [
   securityDefinerView, // RLS010
   functionSearchPathMutable, // RLS011
   updatePolicyMissingWithCheck, // RLS013
+  authUsersExposed, // RLS015
+  policyUsesAuthRole, // RLS016
   multiplePermissivePolicies, // RLS017
   disableRlsInMigration, // RLS018
 ]

@@ -6,9 +6,11 @@
  */
 
 import { LineIndex } from '../core/location.js'
+import { aggregateExprs, EMPTY_EXPR } from '../core/policy.js'
 import type {
   AuthFnRef,
   ColumnInfo,
+  ExprInfo,
   PolicyCommand,
   PolicyInfo,
   SourceLocation,
@@ -76,6 +78,32 @@ function authFnsFromText(clause: string | undefined, acc: AuthFnRef[]): void {
   }
 }
 
+/** Build an {@link ExprInfo} from a clause's text (regex backend). */
+function describeText(clause: string | undefined): ExprInfo {
+  if (clause === undefined) return EMPTY_EXPR
+  const authFns: AuthFnRef[] = []
+  authFnsFromText(clause, authFns)
+  return {
+    present: true,
+    alwaysTrue: isTextAlwaysTrue(clause),
+    authFns,
+    referencesUserMetadata: USER_METADATA_RE.test(clause),
+  }
+}
+
+/** Extracts the `TO <roles>` list from a policy/alter header, or `undefined` if absent. */
+function parseRoles(header: string): string[] | undefined {
+  const toMatch = /\bto\s+([\s\S]+?)\s*$/i.exec(
+    header.replace(/\bas\s+(permissive|restrictive)\b/i, ''),
+  )
+  if (!toMatch) return undefined
+  const roles = (toMatch[1] ?? '')
+    .split(',')
+    .map((r) => r.trim().replace(/^"|"$/g, ''))
+    .filter(Boolean)
+  return roles.length > 0 ? roles : undefined
+}
+
 function parsePolicy(text: string, loc: SourceLocation): PolicyInfo | undefined {
   const m = /^create\s+policy\s+("[^"]+"|[\w]+)\s+on\s+("?[\w".]+"?)([\s\S]*)$/i.exec(text)
   if (!m) return undefined
@@ -87,35 +115,19 @@ function parsePolicy(text: string, loc: SourceLocation): PolicyInfo | undefined 
 
   const permissive = !/\bas\s+restrictive\b/i.test(header)
   const command = (COMMAND_RE.exec(header)?.[1]?.toLowerCase() ?? 'all') as PolicyCommand
-  const toMatch = /\bto\s+([\s\S]+?)\s*$/i.exec(
-    header.replace(/\bas\s+(permissive|restrictive)\b/i, ''),
-  )
-  const roles = toMatch
-    ? (toMatch[1] ?? '')
-        .split(',')
-        .map((r) => r.trim().replace(/^"|"$/g, ''))
-        .filter(Boolean)
-    : ['public']
-
-  const usingText = extractParenAfter(rest, /\busing\b/i)
-  const checkText = extractParenAfter(rest, /\bwith\s+check\b/i)
-  const authFns: AuthFnRef[] = []
-  authFnsFromText(usingText, authFns)
-  authFnsFromText(checkText, authFns)
+  const usingExpr = describeText(extractParenAfter(rest, /\busing\b/i))
+  const checkExpr = describeText(extractParenAfter(rest, /\bwith\s+check\b/i))
 
   return {
     name,
     schema: table.schema,
     table: table.name,
     command,
-    roles: roles.length > 0 ? roles : ['public'],
+    roles: parseRoles(header) ?? ['public'],
     permissive,
-    hasUsing: usingText !== undefined,
-    hasCheck: checkText !== undefined,
-    usingAlwaysTrue: isTextAlwaysTrue(usingText),
-    checkAlwaysTrue: isTextAlwaysTrue(checkText),
-    authFns,
-    referencesUserMetadata: USER_METADATA_RE.test(`${usingText ?? ''} ${checkText ?? ''}`),
+    usingExpr,
+    checkExpr,
+    ...aggregateExprs(usingExpr, checkExpr),
     loc,
   }
 }
@@ -164,6 +176,30 @@ function normalize(text: string, loc: SourceLocation): Statement[] {
     return policy ? [{ kind: 'createPolicy', policy, ...base }] : [{ kind: 'other', ...base }]
   }
 
+  const alterPolicyMatch = /^alter\s+policy\s+("[^"]+"|[\w]+)\s+on\s+("?[\w".]+"?)([\s\S]*)$/i.exec(
+    stripped,
+  )
+  if (alterPolicyMatch) {
+    const ref = parseQualifiedName(alterPolicyMatch[2] ?? '')
+    const rest = alterPolicyMatch[3] ?? ''
+    const clauseIdx = rest.search(/\busing\b|\bwith\s+check\b/i)
+    const header = clauseIdx >= 0 ? rest.slice(0, clauseIdx) : rest
+    const usingText = extractParenAfter(rest, /\busing\b/i)
+    const checkText = extractParenAfter(rest, /\bwith\s+check\b/i)
+    return [
+      {
+        kind: 'alterPolicy',
+        schema: ref.schema,
+        table: ref.name,
+        name: (alterPolicyMatch[1] ?? '').replace(/^"|"$/g, ''),
+        roles: parseRoles(header),
+        usingExpr: usingText !== undefined ? describeText(usingText) : undefined,
+        checkExpr: checkText !== undefined ? describeText(checkText) : undefined,
+        ...base,
+      },
+    ]
+  }
+
   const dropPolicyMatch =
     /^drop\s+policy\s+(?:if\s+exists\s+)?("[^"]+"|[\w]+)\s+on\s+("?[\w".]+"?)/i.exec(stripped)
   if (dropPolicyMatch) {
@@ -174,6 +210,59 @@ function normalize(text: string, loc: SourceLocation): Statement[] {
         schema: ref.schema,
         table: ref.name,
         name: (dropPolicyMatch[1] ?? '').replace(/^"|"$/g, ''),
+        ...base,
+      },
+    ]
+  }
+
+  const privList = (text: string): string[] | 'all' => {
+    const lower = text.toLowerCase()
+    return /\ball\b/.test(lower)
+      ? 'all'
+      : lower
+          .split(',')
+          .map((p) => p.trim())
+          .filter(Boolean)
+  }
+  const roleList = (text: string): string[] =>
+    text
+      .replace(/\bwith\s+grant\s+option\b/i, '')
+      .split(',')
+      .map((r) => r.trim().replace(/^"|"$/g, ''))
+      .filter(Boolean)
+  const schemaList = (text: string): string[] =>
+    text
+      .split(',')
+      .map((s) => s.trim().replace(/^"|"$/g, ''))
+      .filter(Boolean)
+
+  const revokeAllMatch =
+    /^revoke\s+([\s\S]+?)\s+on\s+all\s+tables\s+in\s+schema\s+([\w",\s]+?)\s+from\s+([\s\S]+)$/i.exec(
+      stripped,
+    )
+  if (revokeAllMatch) {
+    return [
+      {
+        kind: 'grantAllInSchema',
+        isGrant: false,
+        privileges: privList(revokeAllMatch[1] ?? ''),
+        schemas: schemaList(revokeAllMatch[2] ?? ''),
+        grantees: roleList(revokeAllMatch[3] ?? ''),
+        ...base,
+      },
+    ]
+  }
+
+  const revokeMatch =
+    /^revoke\s+([\s\S]+?)\s+on\s+(?:table\s+)?("?[\w".]+"?)\s+from\s+([\s\S]+)$/i.exec(stripped)
+  if (revokeMatch) {
+    return [
+      {
+        kind: 'grant',
+        isGrant: false,
+        privileges: privList(revokeMatch[1] ?? ''),
+        objects: [parseQualifiedName(revokeMatch[2] ?? '')],
+        grantees: roleList(revokeMatch[3] ?? ''),
         ...base,
       },
     ]
@@ -243,7 +332,16 @@ function normalize(text: string, loc: SourceLocation): Statement[] {
     const asIndex = stripped.search(/\bas\b/i)
     const header = stripped.slice(0, asIndex >= 0 ? asIndex : undefined)
     const securityInvoker = /security_invoker\s*=\s*(on|true|1)/i.test(header)
-    return [{ kind: 'createView', schema: ref.schema, name: ref.name, securityInvoker, ...base }]
+    return [
+      {
+        kind: 'createView',
+        schema: ref.schema,
+        name: ref.name,
+        securityInvoker,
+        referencesAuthUsers: /\bauth\.users\b/i.test(stripped),
+        ...base,
+      },
+    ]
   }
 
   const funcMatch = /^create\s+(?:or\s+replace\s+)?function\s+("?[\w".]+"?)/i.exec(stripped)

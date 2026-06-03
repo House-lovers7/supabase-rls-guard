@@ -46,6 +46,16 @@ export interface AuthFnRef {
   wrapped: boolean
 }
 
+/** Derived facts about a single policy expression (a `USING` or `WITH CHECK` clause). */
+export interface ExprInfo {
+  /** Whether the clause is present at all. */
+  present: boolean
+  /** The expression is always true (`true`, `1 = 1`, …). */
+  alwaysTrue: boolean
+  authFns: AuthFnRef[]
+  referencesUserMetadata: boolean
+}
+
 /** Fully normalized view of a single `CREATE POLICY` statement. */
 export interface PolicyInfo {
   name: string
@@ -56,6 +66,10 @@ export interface PolicyInfo {
   roles: string[]
   /** `true` for PERMISSIVE (default), `false` for `AS RESTRICTIVE`. */
   permissive: boolean
+  /** Per-clause descriptors (kept so `ALTER POLICY` can patch a single clause). */
+  usingExpr: ExprInfo
+  checkExpr: ExprInfo
+  // Aggregate fields derived from usingExpr/checkExpr (see core/policy.ts).
   hasUsing: boolean
   hasCheck: boolean
   usingAlwaysTrue: boolean
@@ -88,6 +102,16 @@ export type Statement =
   | (Base & { kind: 'createPolicy'; policy: PolicyInfo })
   | (Base & { kind: 'dropPolicy'; schema: string; table: string; name: string })
   | (Base & {
+      kind: 'alterPolicy'
+      schema: string
+      table: string
+      name: string
+      /** Present only if the `ALTER POLICY` specified that clause; otherwise leave unchanged. */
+      roles?: string[]
+      usingExpr?: ExprInfo
+      checkExpr?: ExprInfo
+    })
+  | (Base & {
       kind: 'grant'
       isGrant: boolean
       privileges: string[] | 'all'
@@ -101,7 +125,13 @@ export type Statement =
       schemas: string[]
       grantees: string[]
     })
-  | (Base & { kind: 'createView'; schema: string; name: string; securityInvoker: boolean })
+  | (Base & {
+      kind: 'createView'
+      schema: string
+      name: string
+      securityInvoker: boolean
+      referencesAuthUsers: boolean
+    })
   | (Base & {
       kind: 'createFunction'
       schema: string
@@ -150,6 +180,8 @@ export interface ViewState {
   schema: string
   name: string
   securityInvoker: boolean
+  /** True when the view's definition selects from `auth.users` (RLS015). */
+  referencesAuthUsers: boolean
   definedAt: SourceLocation
 }
 

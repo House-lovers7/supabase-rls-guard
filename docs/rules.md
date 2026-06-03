@@ -1,6 +1,6 @@
 # Rules
 
-Supabase RLS Guard ships 14 rules. Where a rule corresponds to a check in
+Supabase RLS Guard ships 16 rules. Where a rule corresponds to a check in
 Supabase's official [Splinter](https://github.com/supabase/splinter) linter, the
 Splinter code is noted so you can cross-reference the dashboard advisor.
 
@@ -151,6 +151,26 @@ expression as the new-row check, so the common ownership pattern
 reassigning a row to someone else. The lint is an informational nudge: add an
 explicit `WITH CHECK` only when the write constraint should differ from the read
 constraint.
+
+### RLS015 · `auth_users_exposed` · Critical · Splinter 0002
+
+A view in an exposed schema selects from `auth.users`, exposing user emails and
+other PII to the API. Select only the non-sensitive columns you need into your
+own table, or restrict access — don't expose `auth.users` through a view.
+
+### RLS016 · `rls_uses_auth_role` · Info
+
+A policy gates on `auth.role()` inside its `USING`/`WITH CHECK` expression. The
+native `TO <role>` clause is more reliable — Postgres applies it *before*
+evaluating the expression. Informational, because `auth.role()` has legitimate
+uses in compound conditions.
+
+```sql
+-- prefer
+create policy "p" on public.t for select to authenticated using ((select auth.uid()) = id);
+-- over
+create policy "p" on public.t for select using (auth.role() = 'authenticated' and ...);
+```
 
 ### RLS017 · `multiple_permissive_policies` · Warning · Splinter 0006
 

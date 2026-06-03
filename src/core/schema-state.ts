@@ -8,7 +8,20 @@
  * inspect only the *final* state.
  */
 
+import { aggregateExprs } from './policy.js'
 import type { SchemaState, SourceLocation, Statement, TableState } from './types.js'
+
+/** True when a REVOKE fully covers a recorded grant (conservative: keep the grant if unsure). */
+function revokeCovers(
+  revoke: { privileges: string[] | 'all'; grantees: string[] },
+  granted: { privileges: string[] | 'all'; grantees: string[] },
+): boolean {
+  // every grantee of the grant must be among those being revoked
+  if (!granted.grantees.every((r) => revoke.grantees.includes(r))) return false
+  if (revoke.privileges === 'all') return true
+  if (granted.privileges === 'all') return false
+  return granted.privileges.every((p) => revoke.privileges.includes(p))
+}
 
 export function tableKey(schema: string, name: string): string {
   return `${schema}.${name}`
@@ -103,24 +116,43 @@ function applyStatement(state: SchemaState, stmt: Statement): void {
       }
       break
     }
+    case 'alterPolicy': {
+      const table = state.tables.get(tableKey(stmt.schema, stmt.table))
+      const policy = table?.policies.find((p) => p.name === stmt.name)
+      if (!policy) break
+      if (stmt.roles !== undefined) policy.roles = stmt.roles
+      if (stmt.usingExpr !== undefined) policy.usingExpr = stmt.usingExpr
+      if (stmt.checkExpr !== undefined) policy.checkExpr = stmt.checkExpr
+      Object.assign(policy, aggregateExprs(policy.usingExpr, policy.checkExpr))
+      break
+    }
     case 'grant': {
-      if (!stmt.isGrant) break
       for (const obj of stmt.objects) {
         const table = getOrCreateTable(state, obj.schema, obj.name, stmt.loc)
-        table.grants.push({ privileges: stmt.privileges, grantees: stmt.grantees, loc: stmt.loc })
+        if (stmt.isGrant) {
+          table.grants.push({ privileges: stmt.privileges, grantees: stmt.grantees, loc: stmt.loc })
+        } else {
+          // REVOKE: drop the grants it fully covers (conservative).
+          table.grants = table.grants.filter((g) => !revokeCovers(stmt, g))
+        }
       }
       break
     }
     case 'grantAllInSchema': {
-      if (!stmt.isGrant) break
       for (const schema of stmt.schemas) {
         state.schemas.add(schema)
-        state.schemaGrants.push({
-          schema,
-          privileges: stmt.privileges,
-          grantees: stmt.grantees,
-          loc: stmt.loc,
-        })
+        if (stmt.isGrant) {
+          state.schemaGrants.push({
+            schema,
+            privileges: stmt.privileges,
+            grantees: stmt.grantees,
+            loc: stmt.loc,
+          })
+        } else {
+          state.schemaGrants = state.schemaGrants.filter(
+            (g) => !(g.schema === schema && revokeCovers(stmt, g)),
+          )
+        }
       }
       break
     }
@@ -131,6 +163,7 @@ function applyStatement(state: SchemaState, stmt: Statement): void {
         schema: stmt.schema,
         name: stmt.name,
         securityInvoker: stmt.securityInvoker,
+        referencesAuthUsers: stmt.referencesAuthUsers,
         definedAt: stmt.loc,
       })
       break

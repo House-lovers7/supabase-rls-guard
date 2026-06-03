@@ -10,9 +10,11 @@
  */
 
 import { LineIndex, skipLeadingTrivia } from '../core/location.js'
+import { aggregateExprs, EMPTY_EXPR } from '../core/policy.js'
 import type {
   AuthFnRef,
   ColumnInfo,
+  ExprInfo,
   PolicyCommand,
   PolicyInfo,
   SourceLocation,
@@ -96,6 +98,22 @@ function funcName(funcnameList: unknown): string {
   return stringValues(funcnameList).join('.')
 }
 
+/** True when a subtree contains a RangeVar referencing `auth.users` (RLS015). */
+function selectsFromAuthUsers(node: unknown): boolean {
+  if (Array.isArray(node)) return node.some(selectsFromAuthUsers)
+  const obj = asObject(node)
+  if (!obj) return false
+  const rv = field(obj, 'RangeVar')
+  if (
+    rv &&
+    asString(field(rv, 'schemaname')) === 'auth' &&
+    asString(field(rv, 'relname')) === 'users'
+  ) {
+    return true
+  }
+  return Object.values(obj).some(selectsFromAuthUsers)
+}
+
 /** Collects auth/setting function calls, tracking whether each is wrapped in a subquery. */
 function collectAuthFns(node: unknown, insideSubLink: boolean, acc: AuthFnRef[]): void {
   if (Array.isArray(node)) {
@@ -113,14 +131,23 @@ function collectAuthFns(node: unknown, insideSubLink: boolean, acc: AuthFnRef[])
   }
 }
 
+/** Describes a single policy expression node (a `USING` or `WITH CHECK` clause). */
+function describeExpr(node: unknown): ExprInfo {
+  if (node === undefined) return EMPTY_EXPR
+  const authFns: AuthFnRef[] = []
+  collectAuthFns(node, false, authFns)
+  return {
+    present: true,
+    alwaysTrue: isAlwaysTrue(node),
+    authFns,
+    referencesUserMetadata: USER_METADATA_RE.test(stripLocations(node)),
+  }
+}
+
 function normalizePolicy(inner: unknown, loc: SourceLocation): PolicyInfo {
   const table = rangeVar(field(inner, 'table'))
-  const qual = field(inner, 'qual')
-  const withCheck = field(inner, 'with_check')
-  const authFns: AuthFnRef[] = []
-  collectAuthFns(qual, false, authFns)
-  collectAuthFns(withCheck, false, authFns)
-  const exprBlob = `${stripLocations(qual ?? null)}${stripLocations(withCheck ?? null)}`
+  const usingExpr = describeExpr(field(inner, 'qual'))
+  const checkExpr = describeExpr(field(inner, 'with_check'))
   return {
     name: asString(field(inner, 'policy_name')) ?? '(unnamed)',
     schema: table.schema,
@@ -128,12 +155,9 @@ function normalizePolicy(inner: unknown, loc: SourceLocation): PolicyInfo {
     command: (asString(field(inner, 'cmd_name')) ?? 'all') as PolicyCommand,
     roles: asArray(field(inner, 'roles')).map(roleName),
     permissive: field(inner, 'permissive') === true,
-    hasUsing: qual !== undefined,
-    hasCheck: withCheck !== undefined,
-    usingAlwaysTrue: qual !== undefined ? isAlwaysTrue(qual) : false,
-    checkAlwaysTrue: withCheck !== undefined ? isAlwaysTrue(withCheck) : false,
-    authFns,
-    referencesUserMetadata: USER_METADATA_RE.test(exprBlob),
+    usingExpr,
+    checkExpr,
+    ...aggregateExprs(usingExpr, checkExpr),
     loc,
   }
 }
@@ -227,6 +251,24 @@ function normalizeStatement(node: unknown, loc: SourceLocation, raw: string): St
     }
     case 'CreatePolicyStmt':
       return [{ kind: 'createPolicy', policy: normalizePolicy(inner, loc), ...base }]
+    case 'AlterPolicyStmt': {
+      const table = rangeVar(field(inner, 'table'))
+      const rolesNode = field(inner, 'roles')
+      const qual = field(inner, 'qual')
+      const withCheck = field(inner, 'with_check')
+      return [
+        {
+          kind: 'alterPolicy',
+          schema: table.schema,
+          table: table.name,
+          name: asString(field(inner, 'policy_name')) ?? '(unnamed)',
+          roles: rolesNode !== undefined ? asArray(rolesNode).map(roleName) : undefined,
+          usingExpr: qual !== undefined ? describeExpr(qual) : undefined,
+          checkExpr: withCheck !== undefined ? describeExpr(withCheck) : undefined,
+          ...base,
+        },
+      ]
+    }
     case 'GrantStmt': {
       if (asString(field(inner, 'objtype')) !== 'OBJECT_TABLE') {
         return [{ kind: 'other', ...base }]
@@ -277,6 +319,7 @@ function normalizeStatement(node: unknown, loc: SourceLocation, raw: string): St
           schema: rel.schema,
           name: rel.name,
           securityInvoker: viewSecurityInvoker(asArray(field(inner, 'options'))),
+          referencesAuthUsers: selectsFromAuthUsers(field(inner, 'query')),
           ...base,
         },
       ]

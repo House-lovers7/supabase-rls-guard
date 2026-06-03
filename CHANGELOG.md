@@ -7,14 +7,25 @@ caveat that, pre-1.0, minor versions may include breaking changes).
 
 ## [Unreleased]
 
+## [0.2.0]
+
 ### Added
 
+- **RLS015** (`auth_users_exposed`, Splinter 0002): flags a view in an exposed
+  schema that selects from `auth.users` (leaks user PII).
+- **RLS016** (`rls_uses_auth_role`, Info): suggests the native `TO <role>` clause
+  over gating on `auth.role()` inside a policy predicate.
 - **RLS017** (`multiple_permissive_policies`, Splinter 0006): flags two or more
   permissive policies that overlap on the same role and command.
 - **RLS005** now also detects schema-wide grants
   (`GRANT … ON ALL TABLES IN SCHEMA … TO anon`), which apply to every table in
   the schema, including those created in later migrations.
-- `docs/known-limitations.md` documenting what the tool can and cannot detect.
+- **`ALTER POLICY`** is now modeled: loosening a secure policy (e.g. to
+  `USING (true)`) in a later migration is detected.
+- **`REVOKE`** is now applied when folding, so a granted-then-revoked privilege
+  no longer false-positives `RLS005` (conservative: a grant is cleared only when
+  the revoke fully covers it).
+- `docs/known-limitations.md` and per-rule false-positive/suppression notes.
 
 ### Changed
 
@@ -24,7 +35,8 @@ caveat that, pre-1.0, minor versions may include breaking changes).
   omitted, `USING` is reused as the new-row check, so this is usually safe.
   Re-leveled from Warning to Info with accurate wording.
 - README now leads as a "static pre-deploy linter" with an explicit
-  "guardrail, not a guarantee" scope note.
+  "guardrail, not a guarantee" scope note, a bad → detected → fixed example, and
+  a copy-paste CI workflow.
 
 ### Fixed
 
@@ -56,5 +68,6 @@ Initial release.
 - GitHub Actions workflows for CI, self-scan (SARIF upload), and Trusted
   Publishing releases; examples, and full docs.
 
-[Unreleased]: https://github.com/House-lovers7/supabase-rls-guard/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/House-lovers7/supabase-rls-guard/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/House-lovers7/supabase-rls-guard/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/House-lovers7/supabase-rls-guard/releases/tag/v0.1.0

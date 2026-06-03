@@ -1,6 +1,36 @@
 import type { Finding, Rule } from '../core/types.js'
 import { finding, isAllowlisted, splinterDocs } from './util.js'
 
+/** RLS015 — a view in an exposed schema that selects from `auth.users` leaks user PII. */
+export const authUsersExposed: Rule = {
+  id: 'RLS015',
+  name: 'auth_users_exposed',
+  defaultSeverity: 'critical',
+  splinter: '0002',
+  description: 'A view in an exposed schema selects from auth.users, leaking user PII to the API.',
+  docs: splinterDocs('0002_auth_users_exposed'),
+  evaluate({ state, config }) {
+    const findings: Finding[] = []
+    for (const v of state.views) {
+      if (!state.exposedSchemas.includes(v.schema)) continue
+      if (!v.referencesAuthUsers || isAllowlisted(config, v.schema, v.name)) continue
+      findings.push(
+        finding({
+          ruleId: 'RLS015',
+          ruleName: 'auth_users_exposed',
+          severity: 'critical',
+          target: `${v.schema}.${v.name}`,
+          message: `View ${v.schema}.${v.name} selects from auth.users and is in an API-exposed schema — it can leak user emails and other PII to the API.`,
+          fix: 'Do not expose auth.users via a view. Select only the non-sensitive columns you need into your own table, or restrict access.',
+          docs: splinterDocs('0002_auth_users_exposed'),
+          loc: v.definedAt,
+        }),
+      )
+    }
+    return findings
+  },
+}
+
 /** RLS010 — a view in an exposed schema without `security_invoker` bypasses the caller's RLS. */
 export const securityDefinerView: Rule = {
   id: 'RLS010',

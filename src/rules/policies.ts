@@ -237,3 +237,36 @@ export const multiplePermissivePolicies: Rule = {
     return findings
   },
 }
+
+/**
+ * RLS016 — a policy gates on `auth.role()` inside its predicate. The native
+ * `TO <role>` clause is the more reliable mechanism (Postgres applies it before
+ * evaluating the expression). Informational, since `auth.role()` has legitimate
+ * uses in compound conditions.
+ */
+export const policyUsesAuthRole: Rule = {
+  id: 'RLS016',
+  name: 'rls_uses_auth_role',
+  defaultSeverity: 'info',
+  description: 'A policy gates on auth.role() in its predicate; prefer the TO clause.',
+  docs: SUPABASE_RLS_DOCS,
+  evaluate({ state }) {
+    const findings: Finding[] = []
+    for (const p of livePolicies(state)) {
+      if (!p.authFns.some((f) => f.name === 'auth.role')) continue
+      findings.push(
+        finding({
+          ruleId: 'RLS016',
+          ruleName: 'rls_uses_auth_role',
+          severity: 'info',
+          target: `${p.schema}.${p.table}`,
+          message: `Policy "${p.name}" on ${p.schema}.${p.table} gates on auth.role() in its expression. Prefer the native TO clause (e.g. TO authenticated), which Postgres applies before evaluating the policy.`,
+          fix: "Replace `auth.role() = 'authenticated'`-style checks with a `TO authenticated` clause.",
+          docs: SUPABASE_RLS_DOCS,
+          loc: p.loc,
+        }),
+      )
+    }
+    return findings
+  },
+}

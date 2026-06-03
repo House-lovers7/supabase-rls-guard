@@ -81,7 +81,7 @@ yet. (Aggregate only — no project names, schemas, or data are published.)
 
 ## What it checks
 
-14 rules, aligned with Supabase's official [Splinter](https://github.com/supabase/splinter)
+16 rules, aligned with Supabase's official [Splinter](https://github.com/supabase/splinter)
 lint catalog where they overlap. Run `npx supabase-rls-guard --list-rules` for
 the live list, or see [docs/rules.md](./docs/rules.md) for details and fixes.
 
@@ -99,6 +99,8 @@ the live list, or see [docs/rules.md](./docs/rules.md) for details and fixes.
 | `RLS010` | Critical | A view without `security_invoker` (bypasses the caller's RLS) |
 | `RLS011` | Warning | A function without a fixed `search_path` |
 | `RLS013` | Info | An `UPDATE` policy omits `WITH CHECK` (Postgres reuses `USING`) — be explicit if intended |
+| `RLS015` | Critical | A view in an exposed schema selects from `auth.users` (leaks user PII) |
+| `RLS016` | Info | A policy gates on `auth.role()` in its predicate — prefer the `TO <role>` clause |
 | `RLS017` | Warning | Multiple permissive policies for the same role + command (OR-ed on every row) |
 | `RLS018` | Warning | A migration runs `ALTER TABLE … DISABLE ROW LEVEL SECURITY` |
 

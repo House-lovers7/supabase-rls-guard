@@ -245,6 +245,72 @@ describe('RLS018 disable_rls_in_migration', () => {
   })
 })
 
+describe('RLS015 auth_users_exposed', () => {
+  it('fires for a view selecting from auth.users in an exposed schema', async () => {
+    const f = await analyze('create view public.v as select id, email from auth.users;')
+    expect(hasRule(f, 'RLS015')).toBe(true)
+  })
+  it('does not fire for a view that does not touch auth.users', async () => {
+    const f = await analyze(
+      'create table public.t (id int); create view public.v as select id from public.t;',
+    )
+    expect(hasRule(f, 'RLS015')).toBe(false)
+  })
+})
+
+describe('RLS016 rls_uses_auth_role', () => {
+  const setup = 'create table public.t (id int); alter table public.t enable row level security;'
+  it('fires (info) when a policy gates on auth.role() in its predicate', async () => {
+    const f = await analyze(
+      `${setup} create policy p on public.t for select using (auth.role() = 'authenticated');`,
+    )
+    expect(f.find((x) => x.ruleId === 'RLS016')?.severity).toBe('info')
+  })
+  it('does not fire when the policy uses auth.uid() instead', async () => {
+    const f = await analyze(
+      `${setup} create policy p on public.t for select to authenticated using ((select auth.uid()) = id);`,
+    )
+    expect(hasRule(f, 'RLS016')).toBe(false)
+  })
+})
+
+describe('ALTER POLICY (#8)', () => {
+  const setup = 'create table public.t (id int); alter table public.t enable row level security;'
+  it('detects loosening a secure policy to USING (true)', async () => {
+    const f = await analyze(
+      `${setup} create policy p on public.t for select to authenticated using ((select auth.uid()) = id); alter policy p on public.t using (true);`,
+    )
+    expect(hasRule(f, 'RLS006')).toBe(true)
+  })
+  it('clears the finding when a policy is tightened from USING (true)', async () => {
+    const f = await analyze(
+      `${setup} create policy p on public.t for select to authenticated using (true); alter policy p on public.t using ((select auth.uid()) = id);`,
+    )
+    expect(hasRule(f, 'RLS006')).toBe(false)
+  })
+})
+
+describe('REVOKE (#9)', () => {
+  it('clears an RLS005 finding when the grant is fully revoked', async () => {
+    const f = await analyze(
+      'create table public.t (id int); grant select on public.t to anon; revoke select on public.t from anon;',
+    )
+    expect(hasRule(f, 'RLS005')).toBe(false)
+  })
+  it('keeps flagging when a revoke does not fully cover the grant', async () => {
+    const f = await analyze(
+      'create table public.t (id int); grant all on public.t to anon; revoke insert on public.t from anon;',
+    )
+    expect(hasRule(f, 'RLS005')).toBe(true)
+  })
+  it('clears a schema-wide grant when it is revoked', async () => {
+    const f = await analyze(
+      'create table public.t (id int); grant select on all tables in schema public to anon; revoke select on all tables in schema public from anon;',
+    )
+    expect(hasRule(f, 'RLS005')).toBe(false)
+  })
+})
+
 describe('config', () => {
   it('disables a rule via config', async () => {
     const f = await analyze('create table public.t (id int);', {
