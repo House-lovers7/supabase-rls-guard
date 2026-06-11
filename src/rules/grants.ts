@@ -4,15 +4,21 @@ import { finding, isAllowlisted, SUPABASE_RLS_DOCS } from './util.js'
 
 const WRITE_OR_READ = ['select', 'insert', 'update', 'delete']
 
+/** In Postgres, `TO PUBLIC` grants to every role — including anon. */
+function isAnonGrantee(role: string): boolean {
+  const r = role.toLowerCase()
+  return r === 'anon' || r === 'public'
+}
+
 function grantsAccessToAnon(privileges: string[] | 'all', grantees: string[]): boolean {
-  if (!grantees.some((g) => g === 'anon')) return false
+  if (!grantees.some(isAnonGrantee)) return false
   if (privileges === 'all') return true
   return privileges.some((p) => WRITE_OR_READ.includes(p.toLowerCase()))
 }
 
 /**
- * RLS005 — an explicit `GRANT ... TO anon` on a table that has no RLS. With RLS
- * off, the grant hands unauthenticated users direct table access.
+ * RLS005 — privileges reach the anon role (directly, via PUBLIC, via a
+ * schema-wide grant, or via default privileges) on a table that has no RLS.
  */
 export const broadGrantToAnon: Rule = {
   id: 'RLS005',
@@ -24,14 +30,16 @@ export const broadGrantToAnon: Rule = {
     const findings: Finding[] = []
     for (const t of exposedTables(state)) {
       if (t.rlsEnabled || isAllowlisted(config, t.schema, t.name)) continue
-      // A direct table grant, or a `GRANT … ON ALL TABLES IN SCHEMA` covering it.
-      const tableGrant = t.grants.find((g) => grantsAccessToAnon(g.privileges, g.grantees))
-      const schemaGrant = state.schemaGrants.find(
-        (g) => g.schema === t.schema && grantsAccessToAnon(g.privileges, g.grantees),
-      )
-      const grant = tableGrant ?? schemaGrant
+      const grant = t.grants.find((g) => grantsAccessToAnon(g.privileges, g.grantees))
       if (!grant) continue
-      const via = tableGrant ? '' : ' (via GRANT … ON ALL TABLES IN SCHEMA)'
+      const via =
+        grant.via === 'schemaGrant'
+          ? ' (via GRANT … ON ALL TABLES IN SCHEMA)'
+          : grant.via === 'defaultPrivileges'
+            ? ' (via ALTER DEFAULT PRIVILEGES)'
+            : grant.grantees.some((g) => g.toLowerCase() === 'public')
+              ? ' (via GRANT … TO PUBLIC, which includes anon)'
+              : ''
       findings.push(
         finding({
           ruleId: 'RLS005',

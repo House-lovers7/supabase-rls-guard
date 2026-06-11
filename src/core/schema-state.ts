@@ -35,8 +35,13 @@ export function createEmptyState(exposedSchemas: string[]): SchemaState {
     schemas: new Set(['public']),
     exposedSchemas,
     rlsDisabledEvents: [],
-    schemaGrants: [],
+    defaultPrivileges: [],
   }
+}
+
+/** Tables that exist (created and not dropped) in the given schema at this point of the fold. */
+function liveTablesInSchema(state: SchemaState, schema: string): TableState[] {
+  return [...state.tables.values()].filter((t) => t.created && !t.dropped && t.schema === schema)
 }
 
 function getOrCreateTable(
@@ -80,6 +85,17 @@ function applyStatement(state: SchemaState, stmt: Statement): void {
       table.dropped = false
       table.columns = stmt.columns
       table.definedAt = stmt.loc
+      // ALTER DEFAULT PRIVILEGES applies to tables created after it.
+      for (const dp of state.defaultPrivileges) {
+        if (dp.schemas.length === 0 || dp.schemas.includes(stmt.schema)) {
+          table.grants.push({
+            privileges: dp.privileges,
+            grantees: dp.grantees,
+            loc: dp.loc,
+            via: 'defaultPrivileges',
+          })
+        }
+      }
       break
     }
     case 'alterRls': {
@@ -146,20 +162,43 @@ function applyStatement(state: SchemaState, stmt: Statement): void {
       break
     }
     case 'grantAllInSchema': {
+      // Real Postgres semantics: `GRANT/REVOKE ... ON ALL TABLES IN SCHEMA` is a
+      // bulk per-table operation on the tables existing AT EXECUTION TIME.
+      // (Future tables need ALTER DEFAULT PRIVILEGES — modeled separately.)
       for (const schema of stmt.schemas) {
         state.schemas.add(schema)
-        if (stmt.isGrant) {
-          state.schemaGrants.push({
-            schema,
-            privileges: stmt.privileges,
-            grantees: stmt.grantees,
-            loc: stmt.loc,
-          })
-        } else {
-          state.schemaGrants = state.schemaGrants.filter(
-            (g) => !(g.schema === schema && revokeCovers(stmt, g)),
-          )
+        for (const table of liveTablesInSchema(state, schema)) {
+          if (stmt.isGrant) {
+            table.grants.push({
+              privileges: stmt.privileges,
+              grantees: stmt.grantees,
+              loc: stmt.loc,
+              via: 'schemaGrant',
+            })
+          } else {
+            // Cross-level by construction: this filters table-level grants too.
+            table.grants = table.grants.filter((g) => !revokeCovers(stmt, g))
+          }
         }
+      }
+      break
+    }
+    case 'alterDefaultPrivileges': {
+      if (stmt.isGrant) {
+        state.defaultPrivileges.push({
+          schemas: stmt.schemas,
+          privileges: stmt.privileges,
+          grantees: stmt.grantees,
+          loc: stmt.loc,
+        })
+      } else {
+        // ALTER DEFAULT PRIVILEGES ... REVOKE: drop fully-covered defaults with the same scope.
+        state.defaultPrivileges = state.defaultPrivileges.filter((dp) => {
+          const sameScope =
+            (dp.schemas.length === 0 && stmt.schemas.length === 0) ||
+            dp.schemas.every((s) => stmt.schemas.includes(s))
+          return !(sameScope && revokeCovers(stmt, dp))
+        })
       }
       break
     }
@@ -192,6 +231,16 @@ function applyStatement(state: SchemaState, stmt: Statement): void {
     case 'dropTable': {
       const table = state.tables.get(tableKey(stmt.schema, stmt.name))
       if (table) table.dropped = true
+      break
+    }
+    case 'dropView': {
+      state.views = state.views.filter((v) => !(v.schema === stmt.schema && v.name === stmt.name))
+      break
+    }
+    case 'dropFunction': {
+      state.functions = state.functions.filter(
+        (f) => !(f.schema === stmt.schema && f.name === stmt.name),
+      )
       break
     }
     case 'other':

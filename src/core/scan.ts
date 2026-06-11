@@ -21,11 +21,12 @@ export interface ScanOptions extends ConfigOverrides {
 }
 
 function compareFindings(a: Finding, b: Finding): number {
-  if (a.loc.file !== b.loc.file) return a.loc.file.localeCompare(b.loc.file)
+  // Plain codepoint comparison — deterministic across machines/locales.
+  if (a.loc.file !== b.loc.file) return a.loc.file < b.loc.file ? -1 : 1
   if (a.loc.line !== b.loc.line) return a.loc.line - b.loc.line
   const sev = SEVERITY_ORDER[b.severity] - SEVERITY_ORDER[a.severity]
   if (sev !== 0) return sev
-  return a.ruleId.localeCompare(b.ruleId)
+  return a.ruleId < b.ruleId ? -1 : a.ruleId > b.ruleId ? 1 : 0
 }
 
 function summarize(findings: Finding[], filesScanned: number, config: ResolvedConfig): ScanSummary {
@@ -54,11 +55,11 @@ function summarize(findings: Finding[], filesScanned: number, config: ResolvedCo
  */
 export async function scan(options: ScanOptions): Promise<ScanResult> {
   const config = await loadConfig(options)
-  const files = await discover(options.path)
+  const { files, warnings: discoverWarnings } = await discover(options.path)
 
   const allStatements: Statement[] = []
   const suppressions = new Map<string, FileSuppressions>()
-  const warnings: string[] = [...config.warnings]
+  const warnings: string[] = [...config.warnings, ...discoverWarnings]
 
   // Parse sequentially: the libpg-query WASM instance is shared and not
   // re-entrant, and we must keep statements in file (application) order anyway.

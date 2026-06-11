@@ -7,6 +7,57 @@ caveat that, pre-1.0, minor versions may include breaking changes).
 
 ## [Unreleased]
 
+Audit batch: 17 bugs found by a multi-agent audit (with adversarial verification
+of every finding) were fixed — see issues #18–#34.
+
+### Fixed — correctness of findings
+
+- **Regex backend no longer misparses `ALTER POLICY … RENAME TO`** as a roles
+  change, which silently downgraded an always-true-policy Critical and flipped
+  the CI exit code (#18).
+- **libpg byte offsets are converted to string indexes**, so line numbers are
+  correct after multibyte text (e.g. Japanese comments) and inline suppressions
+  target the right lines (#20).
+- **GRANT/REVOKE semantic fidelity** (#21, #24, #25):
+  - schema-wide grants expand to the tables existing at execution time (no more
+    false positives on tables created later);
+  - `ALTER DEFAULT PRIVILEGES … GRANT … ON TABLES` is modeled and applies to
+    tables created afterwards (was a false negative);
+  - REVOKE now cancels grants across levels (table-level vs `ON ALL TABLES IN
+    SCHEMA`), fixing permanent RLS005 false positives on the canonical
+    `REVOKE ALL … FROM anon` lockdown pattern;
+  - `REVOKE GRANT OPTION FOR` no longer clears the underlying grant;
+  - `GRANT … TO PUBLIC` is treated as reaching anon.
+- **`DROP VIEW` / `DROP FUNCTION` are folded**, so deleted objects stop firing
+  RLS010/RLS015/RLS011 (#22).
+- **RLS017 expands `TO public`** to every concrete role, catching the common
+  legacy-TO-less + role-scoped overlap (#23).
+- **Regex backend auth-fn detection** uses identifier boundaries and
+  subquery-scope tracking (no more `my_auth.role_check` false positives or
+  closed-subquery false negatives) (#26).
+- **Regex backend `ADD COLUMN`** handles comma-separated multi-ADD and the
+  `COLUMN`-keyword-less form (#27).
+
+### Fixed — CLI & pipeline
+
+- **Piped output is no longer truncated at 64 KiB**: every exit waits for stdout
+  to flush (#19).
+- **`discover()` no longer aborts the scan** on a directory named `*.sql` or a
+  broken symlink — such entries are skipped with a warning (#28); directory
+  symlinks are not followed and files are de-duplicated by realpath (#31).
+- **`--strict` only ever lowers the gate** — it no longer weakens a config that
+  sets `failOn: "info"` (#29).
+- **Migration ordering is deterministic codepoint order** (matching migration
+  runners), not locale-dependent collation (#30).
+- **Invalid `--format`/`--backend`/`--fail-on` values exit 2** (documented
+  tool-error code), not 1 (#32).
+- **Out-of-cwd scans emit scan-root-relative paths** instead of `..`-prefixed
+  ones that GitHub cannot map (#33).
+- **Zero `.sql` files scanned now exits 2** (fail-closed) unless `--allow-empty`
+  is passed; the warning is no longer suppressed by `--quiet` (#34).
+- `loadConfig` no longer crashes when a search start directory is supplied
+  (cosmiconfig `stopDir` misuse).
+
 ## [0.2.0]
 
 ### Added

@@ -325,6 +325,149 @@ describe('ALTER TABLE ADD COLUMN (#6)', () => {
   })
 })
 
+describe('#18 ALTER POLICY ... RENAME TO', () => {
+  const sql =
+    'create table public.t (id uuid, user_id uuid); alter table public.t enable row level security; create policy p on public.t for select using (true); alter policy p on public.t rename to q;'
+  it('keeps RLS006 critical under the regex backend (rename is not a roles change)', async () => {
+    const f = await analyze(sql, { backend: 'regex' })
+    expect(f.find((x) => x.ruleId === 'RLS006')?.severity).toBe('critical')
+    expect(hasRule(f, 'RLS007')).toBe(true)
+  })
+  it('produces identical rule sets under both backends', async () => {
+    const a = new Set(ruleIds(await analyze(sql, { backend: 'libpg' })))
+    const b = new Set(ruleIds(await analyze(sql, { backend: 'regex' })))
+    expect([...a].sort()).toEqual([...b].sort())
+  })
+})
+
+describe('#21 GRANT/REVOKE semantics', () => {
+  it('cross-level: schema-wide REVOKE ALL clears a table-level grant', async () => {
+    const f = await analyze(
+      'create table public.t (id uuid); grant select on public.t to anon; revoke all on all tables in schema public from anon;',
+    )
+    expect(hasRule(f, 'RLS005')).toBe(false)
+  })
+  it('cross-level: table-level REVOKE clears an expanded schema-wide grant', async () => {
+    const f = await analyze(
+      'create table public.t (id uuid); grant select on all tables in schema public to anon; revoke select on public.t from anon;',
+    )
+    expect(hasRule(f, 'RLS005')).toBe(false)
+  })
+  it('schema-wide GRANT does NOT apply to tables created after it', async () => {
+    const f = await analyze(
+      'grant select on all tables in schema public to anon; create table public.posts (id uuid);',
+    )
+    expect(hasRule(f, 'RLS005')).toBe(false) // RLS001 still fires for the table itself
+    expect(hasRule(f, 'RLS001')).toBe(true)
+  })
+  it('ALTER DEFAULT PRIVILEGES applies to tables created after it (RLS005 fires)', async () => {
+    const f = await analyze(
+      'alter default privileges in schema public grant select on tables to anon; create table public.posts (id uuid);',
+    )
+    expect(hasRule(f, 'RLS005')).toBe(true)
+  })
+  it('ALTER DEFAULT PRIVILEGES does not affect tables created before it', async () => {
+    const f = await analyze(
+      'create table public.posts (id uuid); alter default privileges in schema public grant select on tables to anon;',
+    )
+    expect(hasRule(f, 'RLS005')).toBe(false)
+  })
+  it('ADP is detected by both parser backends', async () => {
+    const sql =
+      'alter default privileges in schema public grant select on tables to anon; create table public.posts (id uuid);'
+    expect(hasRule(await analyze(sql, { backend: 'libpg' }), 'RLS005')).toBe(true)
+    expect(hasRule(await analyze(sql, { backend: 'regex' }), 'RLS005')).toBe(true)
+  })
+})
+
+describe('#22 DROP VIEW / DROP FUNCTION', () => {
+  it('a dropped view no longer fires RLS010/RLS015', async () => {
+    const f = await analyze(
+      'create view public.v as select email from auth.users; drop view public.v;',
+    )
+    expect(hasRule(f, 'RLS010')).toBe(false)
+    expect(hasRule(f, 'RLS015')).toBe(false)
+  })
+  it('a dropped function no longer fires RLS011', async () => {
+    const f = await analyze(
+      'create function public.f() returns int language sql as $$ select 1 $$; drop function public.f();',
+    )
+    expect(hasRule(f, 'RLS011')).toBe(false)
+  })
+  it('drop handling matches across backends', async () => {
+    const sql =
+      'create view public.v as select email from auth.users; drop view if exists public.v;'
+    expect(ruleIds(await analyze(sql, { backend: 'libpg' })).sort()).toEqual(
+      ruleIds(await analyze(sql, { backend: 'regex' })).sort(),
+    )
+  })
+})
+
+describe('#23 RLS017 public-role overlap', () => {
+  it('fires when a TO-less (public) policy overlaps a role-specific one', async () => {
+    const f = await analyze(
+      'create table public.t (id uuid, user_id uuid); alter table public.t enable row level security; create policy a on public.t for select using ((select auth.uid()) = user_id); create policy b on public.t for select to authenticated using ((select auth.uid()) = user_id);',
+    )
+    expect(hasRule(f, 'RLS017')).toBe(true)
+  })
+})
+
+describe('#24 REVOKE GRANT OPTION FOR', () => {
+  const sql =
+    'create table public.t (id uuid); grant select on public.t to anon; revoke grant option for select on public.t from anon;'
+  it('keeps the underlying grant — RLS005 still fires (libpg)', async () => {
+    expect(hasRule(await analyze(sql, { backend: 'libpg' }), 'RLS005')).toBe(true)
+  })
+  it('keeps the underlying grant — RLS005 still fires (regex)', async () => {
+    expect(hasRule(await analyze(sql, { backend: 'regex' }), 'RLS005')).toBe(true)
+  })
+})
+
+describe('#25 GRANT ... TO PUBLIC', () => {
+  it('fires RLS005 (PUBLIC includes anon)', async () => {
+    const f = await analyze('create table public.t (id uuid); grant select on public.t to public;')
+    expect(hasRule(f, 'RLS005')).toBe(true)
+  })
+  it('fires at schema level too', async () => {
+    const f = await analyze(
+      'create table public.t (id uuid); grant select on all tables in schema public to public;',
+    )
+    expect(hasRule(f, 'RLS005')).toBe(true)
+  })
+})
+
+describe('#26 regex auth-fn heuristics', () => {
+  it('a closed earlier subquery does not mark a later call as wrapped (RLS008 fires)', async () => {
+    const sql =
+      'create table public.t (id uuid, user_id uuid, team_id uuid); alter table public.t enable row level security; create policy p on public.t for select to authenticated using (team_id in (select team_id from public.memberships) and auth.uid() = user_id);'
+    expect(hasRule(await analyze(sql, { backend: 'regex' }), 'RLS008')).toBe(true)
+    expect(hasRule(await analyze(sql, { backend: 'libpg' }), 'RLS008')).toBe(true)
+  })
+  it('my_auth.role_check is not mistaken for auth.role (no RLS008/RLS016)', async () => {
+    const sql =
+      'create table public.t (id uuid, user_id uuid); alter table public.t enable row level security; create policy p on public.t for select to authenticated using (my_auth.role_check(user_id));'
+    const f = await analyze(sql, { backend: 'regex' })
+    expect(hasRule(f, 'RLS008')).toBe(false)
+    expect(hasRule(f, 'RLS016')).toBe(false)
+  })
+})
+
+describe('#27 regex ADD COLUMN forms', () => {
+  it('multi-command ALTER TABLE tracks every added column', async () => {
+    const sql =
+      'create table public.t (id int); alter table public.t add column password text, add column ssn text;'
+    const f = await analyze(sql, { backend: 'regex' })
+    const targets = f.filter((x) => x.ruleId === 'RLS004').map((x) => x.target)
+    expect(targets).toContain('public.t.password')
+    expect(targets).toContain('public.t.ssn')
+  })
+  it('ADD without the COLUMN keyword is tracked', async () => {
+    const sql = 'create table public.t (id int); alter table public.t add api_key text;'
+    expect(hasRule(await analyze(sql, { backend: 'regex' }), 'RLS004')).toBe(true)
+    expect(hasRule(await analyze(sql, { backend: 'libpg' }), 'RLS004')).toBe(true)
+  })
+})
+
 describe('config', () => {
   it('disables a rule via config', async () => {
     const f = await analyze('create table public.t (id int);', {

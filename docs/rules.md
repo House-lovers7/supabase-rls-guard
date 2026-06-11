@@ -63,16 +63,20 @@ _False positive? A column name can coincidentally contain a keyword (e.g.
 
 ### RLS005 · `broad_grant_to_anon` · Critical
 
-An explicit `GRANT … TO anon` on a table that has no RLS hands unauthenticated
-users direct access. This also covers schema-wide grants
-(`GRANT … ON ALL TABLES IN SCHEMA public TO anon`), which apply to every table in
-the schema — including tables created in later migrations.
+An explicit `GRANT … TO anon` (or `TO PUBLIC`, which includes anon) on a table
+that has no RLS hands unauthenticated users direct access. Schema-wide grants
+(`GRANT … ON ALL TABLES IN SCHEMA public TO anon`) are expanded to the tables
+existing at that point — matching real Postgres semantics — and
+`ALTER DEFAULT PRIVILEGES … GRANT … ON TABLES TO anon` is applied to tables
+created afterwards. `REVOKE` (at either level) clears the grants it fully covers.
 
 ```sql
 -- ✗ flagged (no RLS on public.public_notes)
 grant all on public.public_notes to anon;
--- ✗ also flagged for every un-RLS'd table in public
+-- ✗ flagged for every un-RLS'd table existing in public at this point
 grant select on all tables in schema public to anon;
+-- ✗ flagged for un-RLS'd tables created after this
+alter default privileges in schema public grant select on tables to anon;
 ```
 
 ### RLS006 · `rls_policy_always_true` · Critical / Warning · Splinter 0024
@@ -176,8 +180,10 @@ create policy "p" on public.t for select using (auth.role() = 'authenticated' an
 
 Two or more **permissive** policies apply to the same role and command. Postgres
 evaluates and OR-s every permissive policy on each matching row, so overlapping
-policies are a performance footgun. Merge them into a single policy, or make some
-`RESTRICTIVE`. (Restrictive policies are AND-ed and are not counted here.)
+policies are a performance footgun. A policy with no `TO` clause (= `TO public`)
+applies to **every** role, so it overlaps each role-specific policy on the same
+command. Merge them into a single policy, or make some `RESTRICTIVE`.
+(Restrictive policies are AND-ed and are not counted here.)
 
 ### RLS018 · `disable_rls_in_migration` · Warning
 

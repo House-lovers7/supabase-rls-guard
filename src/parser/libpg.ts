@@ -299,6 +299,12 @@ function normalizeStatement(node: unknown, loc: SourceLocation, raw: string): St
       const isGrant = field(inner, 'is_grant') === true
       const grantees = asArray(field(inner, 'grantees')).map(roleName)
 
+      // `REVOKE GRANT OPTION FOR ...` removes only the ability to re-grant; the
+      // underlying privilege survives — do not subtract the grant from the fold.
+      if (!isGrant && isTrue(field(inner, 'grant_option'))) {
+        return [{ kind: 'other', ...base }]
+      }
+
       if (targtype === 'ACL_TARGET_OBJECT') {
         return [
           {
@@ -377,11 +383,83 @@ function normalizeStatement(node: unknown, loc: SourceLocation, raw: string): St
           },
         ]
       }
+      if (removeType === 'OBJECT_VIEW' || removeType === 'OBJECT_MATVIEW') {
+        return objects.map((o) => {
+          const items = stringValues(field(field(o, 'List'), 'items'))
+          const [schema, name] = items.length >= 2 ? items : ['public', items[0] ?? '']
+          return { kind: 'dropView' as const, schema: schema!, name: name!, ...base }
+        })
+      }
+      if (removeType === 'OBJECT_FUNCTION') {
+        // objects are ObjectWithArgs nodes: { objname: [String...], objargs: ... }
+        return objects.map((o) => {
+          const items = stringValues(field(field(o, 'ObjectWithArgs'), 'objname'))
+          const [schema, name] = items.length >= 2 ? items : ['public', items[0] ?? '']
+          return { kind: 'dropFunction' as const, schema: schema!, name: name!, ...base }
+        })
+      }
       return [{ kind: 'other', ...base }]
+    }
+    case 'AlterDefaultPrivilegesStmt': {
+      // { options: [DefElem{defname:'schemas', arg:{List of String}}], action: <GrantStmt fields> }
+      const action = field(inner, 'action')
+      const actionInner = field(action, 'GrantStmt') ?? action
+      if (asString(field(actionInner, 'objtype')) !== 'OBJECT_TABLE') {
+        return [{ kind: 'other', ...base }]
+      }
+      const schemas = asArray(field(inner, 'options')).flatMap((o) => {
+        const de = field(o, 'DefElem')
+        if (asString(field(de, 'defname')) !== 'schemas') return []
+        const arg = field(de, 'arg')
+        // arg is either a List node ({List:{items:[...]}}) or a bare array of String nodes
+        return stringValues(field(field(arg, 'List'), 'items') ?? arg)
+      })
+      const privList = field(actionInner, 'privileges')
+      const privileges: string[] | 'all' =
+        privList === undefined
+          ? 'all'
+          : asArray(privList)
+              .map((p) => asString(field(field(p, 'AccessPriv'), 'priv_name')))
+              .filter((p): p is string => p !== undefined)
+      return [
+        {
+          kind: 'alterDefaultPrivileges',
+          isGrant: field(actionInner, 'is_grant') === true,
+          privileges,
+          schemas,
+          grantees: asArray(field(actionInner, 'grantees')).map(roleName),
+          ...base,
+        },
+      ]
     }
     default:
       return [{ kind: 'other', ...base }]
   }
+}
+
+/**
+ * libpg-query reports `stmt_location`/`stmt_len` as UTF-8 BYTE offsets (the WASM
+ * wrapper marshals the JS string to UTF-8), but JS string APIs index UTF-16 code
+ * units. Returns a converter from byte offset → string index. Pure-ASCII content
+ * (the common case) short-circuits to the identity function.
+ */
+function makeByteToCharConverter(content: string): (byteOffset: number) => number {
+  const byteLength = Buffer.byteLength(content, 'utf8')
+  if (byteLength === content.length) return (b) => b // ASCII fast path
+
+  const byteToChar = new Uint32Array(byteLength + 1)
+  let byte = 0
+  let i = 0
+  while (i < content.length) {
+    const cp = content.codePointAt(i) as number
+    const charLen = cp > 0xffff ? 2 : 1
+    const utf8Len = cp <= 0x7f ? 1 : cp <= 0x7ff ? 2 : cp <= 0xffff ? 3 : 4
+    byteToChar.fill(i, byte, byte + utf8Len)
+    byte += utf8Len
+    i += charLen
+  }
+  byteToChar[byteLength] = content.length
+  return (b) => byteToChar[Math.max(0, Math.min(b, byteLength))] as number
 }
 
 type ParseFn = (sql: string) => Promise<unknown>
@@ -404,15 +482,22 @@ export const libpgBackend: ParserBackend = {
     const statements: Statement[] = []
     const rawStmts = asArray(field(tree, 'stmts'))
 
+    const byteToChar = makeByteToCharConverter(content)
+
     rawStmts.forEach((rawStmt, i) => {
       const node = field(rawStmt, 'stmt')
       if (node === undefined) return
-      const rawStart = asNumber(field(rawStmt, 'stmt_location')) ?? 0
-      const len = asNumber(field(rawStmt, 'stmt_len'))
+      // stmt_location/stmt_len are UTF-8 byte offsets — convert to string indexes.
+      const byteStart = asNumber(field(rawStmt, 'stmt_location')) ?? 0
+      const byteLen = asNumber(field(rawStmt, 'stmt_len'))
+      const rawStart = byteToChar(byteStart)
       const end =
-        len !== undefined
-          ? rawStart + len
-          : (asNumber(field(rawStmts[i + 1], 'stmt_location')) ?? content.length)
+        byteLen !== undefined
+          ? byteToChar(byteStart + byteLen)
+          : (() => {
+              const nextByte = asNumber(field(rawStmts[i + 1], 'stmt_location'))
+              return nextByte !== undefined ? byteToChar(nextByte) : content.length
+            })()
       // libpg points at the char after the previous `;`; skip trivia to the real token.
       const offset = skipLeadingTrivia(content, rawStart, end)
       const { line, column } = index.locate(offset)

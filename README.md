@@ -201,6 +201,7 @@ npx supabase-rls-guard --list-rules
 | `--backend <auto\|libpg\|regex>` | Parser backend (default `auto`) |
 | `--no-color` | Disable ANSI colors |
 | `--quiet` | Suppress warnings on stderr |
+| `--allow-empty` | Exit 0 when no `.sql` files are found (default: exit 2) |
 | `--list-rules` | Print all rules and exit |
 
 ### Exit codes
@@ -209,7 +210,7 @@ npx supabase-rls-guard --list-rules
 | --- | --- |
 | `0` | No findings at or above the threshold |
 | `1` | Findings at or above the threshold |
-| `2` | Tool/config error (bad flag, path not found) |
+| `2` | Tool/config error (bad flag value, path not found, **zero `.sql` files scanned** — see `--allow-empty`) |
 
 ## CI integration
 

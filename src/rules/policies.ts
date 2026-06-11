@@ -194,13 +194,24 @@ export const multiplePermissivePolicies: Rule = {
     for (const t of state.tables.values()) {
       if (t.dropped || isAllowlisted(config, t.schema, t.name)) continue
 
-      // Bucket permissive policies by `${command}|${role}` (expanding `all`).
+      // `TO public` (or a missing TO clause) applies to EVERY role in Postgres,
+      // so a public policy overlaps each concrete role used on this table.
+      const concreteRoles = new Set<string>()
+      for (const p of t.policies) {
+        if (!p.permissive) continue
+        for (const role of p.roles) if (role !== 'public') concreteRoles.add(role)
+      }
+
+      // Bucket permissive policies by `${command}|${role}` (expanding `all` and `public`).
       const buckets = new Map<string, PolicyInfo[]>()
       for (const p of t.policies) {
         if (!p.permissive) continue
         const commands = p.command === 'all' ? DML_COMMANDS : [p.command]
+        const roles = p.roles.includes('public')
+          ? [...new Set([...p.roles, ...concreteRoles])]
+          : p.roles
         for (const cmd of commands) {
-          for (const role of p.roles) {
+          for (const role of roles) {
             const key = `${cmd}|${role}`
             const arr = buckets.get(key) ?? []
             if (!arr.some((q) => q.name === p.name)) arr.push(p)

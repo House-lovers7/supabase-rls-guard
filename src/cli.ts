@@ -7,9 +7,26 @@ import { render } from './reporters/index.js'
 import { ruleList } from './rules/registry.js'
 import { TOOL_NAME, VERSION } from './version.js'
 
-const FORMATS: OutputFormat[] = ['text', 'json', 'github', 'sarif']
-const BACKENDS: BackendChoice[] = ['auto', 'libpg', 'regex']
-const SEVERITIES: Severity[] = ['critical', 'warning', 'info']
+const FORMATS: readonly string[] = ['text', 'json', 'github', 'sarif']
+const BACKENDS: readonly string[] = ['auto', 'libpg', 'regex']
+const SEVERITIES: readonly string[] = ['critical', 'warning', 'info']
+
+/**
+ * Write to a stream and resolve once the chunk is flushed. `process.exit()`
+ * discards data still queued on a piped stdout beyond the OS pipe buffer
+ * (~64 KiB), silently truncating large reports — so every exit waits for its
+ * output first.
+ */
+function write(stream: NodeJS.WriteStream, text: string): Promise<void> {
+  return new Promise((resolve) => {
+    stream.write(text, () => resolve())
+  })
+}
+
+async function fail(code: number, message: string): Promise<never> {
+  await write(process.stderr, `error: ${message}\n`)
+  process.exit(code)
+}
 
 function printRules(): void {
   process.stdout.write(`${TOOL_NAME} v${VERSION} — rules:\n\n`)
@@ -27,6 +44,9 @@ const main = defineCommand({
     version: VERSION,
     description: 'Statically scan Supabase migrations for dangerous RLS mistakes before you ship.',
   },
+  // Values are validated inside run() so that bad values exit 2 (tool/config
+  // error) per the documented contract — citty's own enum validation exits 1,
+  // indistinguishable from "findings present" in CI.
   args: {
     path: {
       type: 'positional',
@@ -35,14 +55,12 @@ const main = defineCommand({
       description: 'Migration file, directory, or project root to scan',
     },
     format: {
-      type: 'enum',
-      options: FORMATS,
+      type: 'string',
       default: 'text',
       description: 'Output format: text | json | github | sarif',
     },
     backend: {
-      type: 'enum',
-      options: BACKENDS,
+      type: 'string',
       default: 'auto',
       description: 'SQL parser backend: auto | libpg | regex',
     },
@@ -52,9 +70,9 @@ const main = defineCommand({
       description: 'Treat warnings as failures (exit non-zero)',
     },
     'fail-on': {
-      type: 'enum',
-      options: SEVERITIES,
-      description: 'Severity that causes a non-zero exit (default: critical)',
+      type: 'string',
+      description:
+        'Severity that causes a non-zero exit: critical | warning | info (default: critical)',
     },
     config: { type: 'string', description: 'Path to a config file (overrides auto-discovery)' },
     disable: {
@@ -67,6 +85,11 @@ const main = defineCommand({
       description: 'Colorize text output (use --no-color to disable)',
     },
     quiet: { type: 'boolean', default: false, description: 'Suppress warnings on stderr' },
+    'allow-empty': {
+      type: 'boolean',
+      default: false,
+      description: 'Exit 0 when no .sql files are found (default: exit 2)',
+    },
     'list-rules': { type: 'boolean', default: false, description: 'Print all rules and exit' },
   },
   async run({ args }) {
@@ -75,8 +98,19 @@ const main = defineCommand({
       return
     }
 
-    const format = args.format as OutputFormat
-    const failOn = (args['fail-on'] || undefined) as Severity | undefined
+    const format = String(args.format)
+    if (!FORMATS.includes(format)) {
+      await fail(2, `invalid --format "${format}" (expected one of: ${FORMATS.join(', ')})`)
+    }
+    const backend = String(args.backend)
+    if (!BACKENDS.includes(backend)) {
+      await fail(2, `invalid --backend "${backend}" (expected one of: ${BACKENDS.join(', ')})`)
+    }
+    const failOnRaw = args['fail-on']
+    if (failOnRaw !== undefined && !SEVERITIES.includes(String(failOnRaw))) {
+      await fail(2, `invalid --fail-on "${failOnRaw}" (expected one of: ${SEVERITIES.join(', ')})`)
+    }
+
     const disableRules =
       typeof args.disable === 'string' && args.disable.length > 0
         ? args.disable
@@ -88,27 +122,32 @@ const main = defineCommand({
     try {
       const result = await scan({
         path: String(args.path),
-        backend: args.backend as BackendChoice,
+        backend: backend as BackendChoice,
         strict: Boolean(args.strict),
-        failOn,
+        failOn: failOnRaw !== undefined ? (String(failOnRaw) as Severity) : undefined,
         configPath: typeof args.config === 'string' ? args.config : undefined,
         disableRules,
       })
 
-      const output = render(result, format, { color: Boolean(args.color) })
-      process.stdout.write(`${output}\n`)
+      // A zero-file scan is a misconfigured path, not a clean pass — fail closed.
+      // (Not silenced by --quiet: a security gate must not pass silently on nothing.)
+      if (result.summary.filesScanned === 0 && !args['allow-empty']) {
+        await fail(
+          2,
+          `no .sql files found at "${args.path}" — nothing was scanned (use --allow-empty to permit this)`,
+        )
+      }
+
+      const output = render(result, format as OutputFormat, { color: Boolean(args.color) })
+      await write(process.stdout, `${output}\n`)
 
       if (!args.quiet) {
-        if (result.summary.filesScanned === 0) {
-          process.stderr.write(`warning: no .sql files found at "${args.path}"\n`)
-        }
-        for (const w of result.warnings) process.stderr.write(`warning: ${w}\n`)
+        for (const w of result.warnings) await write(process.stderr, `warning: ${w}\n`)
       }
 
       process.exit(result.summary.failed ? 1 : 0)
     } catch (err) {
-      process.stderr.write(`error: ${(err as Error).message}\n`)
-      process.exit(2)
+      await fail(2, err instanceof Error ? err.message : String(err))
     }
   },
 })

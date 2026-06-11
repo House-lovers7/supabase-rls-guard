@@ -141,6 +141,16 @@ export type Statement =
       securityDefiner: boolean
     })
   | (Base & { kind: 'dropTable'; schema: string; name: string })
+  | (Base & { kind: 'dropView'; schema: string; name: string })
+  | (Base & { kind: 'dropFunction'; schema: string; name: string })
+  | (Base & {
+      kind: 'alterDefaultPrivileges'
+      isGrant: boolean
+      privileges: string[] | 'all'
+      /** Schemas the default applies to; empty = all schemas. */
+      schemas: string[]
+      grantees: string[]
+    })
   | (Base & { kind: 'createSchema'; name: string })
   | (Base & { kind: 'other' })
 
@@ -152,11 +162,14 @@ export interface GrantState {
   privileges: string[] | 'all'
   grantees: string[]
   loc: SourceLocation
+  /** Set when the grant was applied indirectly (schema-wide grant / default privileges). */
+  via?: 'schemaGrant' | 'defaultPrivileges'
 }
 
-/** A `GRANT … ON ALL TABLES IN SCHEMA <schema> …` — applies to every table in the schema. */
-export interface SchemaGrantState {
-  schema: string
+/** An `ALTER DEFAULT PRIVILEGES … GRANT … ON TABLES TO …` — applies to tables created later. */
+export interface DefaultPrivilegeState {
+  /** Schemas the default applies to; empty = all schemas. */
+  schemas: string[]
   privileges: string[] | 'all'
   grantees: string[]
   loc: SourceLocation
@@ -210,8 +223,8 @@ export interface SchemaState {
   exposedSchemas: string[]
   /** Every `ALTER TABLE ... DISABLE ROW LEVEL SECURITY` seen, in order (for RLS018). */
   rlsDisabledEvents: RlsToggleEvent[]
-  /** `GRANT … ON ALL TABLES IN SCHEMA …` grants, applied to every table in the schema. */
-  schemaGrants: SchemaGrantState[]
+  /** Active `ALTER DEFAULT PRIVILEGES` grants, applied to tables created after them. */
+  defaultPrivileges: DefaultPrivilegeState[]
 }
 
 // ---------------------------------------------------------------------------

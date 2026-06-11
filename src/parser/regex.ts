@@ -63,17 +63,34 @@ function parseColumns(body: string | undefined): ColumnInfo[] {
   return cols
 }
 
+/**
+ * Returns, for every position in `clause`, whether that position sits inside a
+ * still-open `( select …` scope. Mirrors the libpg backend's SubLink-scoped
+ * "wrapped" detection (a closed earlier subquery must not count).
+ */
+function selectScopeMap(clause: string): boolean[] {
+  const inSelect: boolean[] = new Array(clause.length)
+  const stack: boolean[] = []
+  for (let i = 0; i < clause.length; i++) {
+    inSelect[i] = stack.includes(true)
+    const c = clause[i]
+    if (c === '(') {
+      stack.push(/^\(\s*select\b/i.test(clause.slice(i)))
+    } else if (c === ')') {
+      stack.pop()
+    }
+  }
+  return inSelect
+}
+
 function authFnsFromText(clause: string | undefined, acc: AuthFnRef[]): void {
   if (!clause) return
-  const lower = clause.toLowerCase()
+  const inSelect = selectScopeMap(clause)
   for (const fn of AUTH_FUNCTIONS) {
-    let from = 0
-    for (;;) {
-      const idx = lower.indexOf(fn, from)
-      if (idx === -1) break
-      const wrapped = /\(\s*select\b/i.test(clause.slice(0, idx))
-      acc.push({ name: fn, wrapped })
-      from = idx + fn.length
+    // Identifier-boundary match: `auth.role` must not match inside `my_auth.role_check`.
+    const re = new RegExp(`(?<![\\w.])${fn.replace(/\./g, '\\.')}\\s*\\(`, 'gi')
+    for (const m of clause.matchAll(re)) {
+      acc.push({ name: fn, wrapped: inSelect[m.index] === true })
     }
   }
 }
@@ -171,23 +188,30 @@ function normalize(text: string, loc: SourceLocation): Statement[] {
     return [{ kind: 'alterRls', schema: ref.schema, name: ref.name, action, ...base }]
   }
 
-  const addColumnMatch =
-    /^alter\s+table\s+(?:if\s+exists\s+)?("?[\w".]+"?)\s+add\s+column\s+(?:if\s+not\s+exists\s+)?("([^"]+)"|[\w$]+)\s+(.+)$/i.exec(
-      stripped,
-    )
-  if (addColumnMatch) {
-    const ref = parseQualifiedName(addColumnMatch[1] ?? '')
-    const name = addColumnMatch[3] ?? addColumnMatch[2] ?? ''
-    const type = (addColumnMatch[4] ?? '').trim().split(/\s+/)[0] ?? 'unknown'
-    return [
-      {
+  // ALTER TABLE ... ADD [COLUMN] — may carry several comma-separated ADD commands.
+  const alterTableMatch = /^alter\s+table\s+(?:if\s+exists\s+)?("?[\w".]+"?)\s+([\s\S]+)$/i.exec(
+    stripped,
+  )
+  if (alterTableMatch && /^add\b/i.test((alterTableMatch[2] ?? '').trim())) {
+    const ref = parseQualifiedName(alterTableMatch[1] ?? '')
+    const added: Statement[] = []
+    for (const segment of splitTopLevelCommas(alterTableMatch[2] ?? '')) {
+      const m = /^add\s+(?:column\s+)?(?:if\s+not\s+exists\s+)?("([^"]+)"|[\w$]+)\s+(\S+)/i.exec(
+        segment.trim(),
+      )
+      if (!m) continue
+      const name = m[2] ?? m[1] ?? ''
+      // Skip constraint forms like ADD CONSTRAINT / ADD PRIMARY KEY etc.
+      if (/^(constraint|primary|unique|foreign|check|exclude)$/i.test(name)) continue
+      added.push({
         kind: 'alterTableAddColumn',
         schema: ref.schema,
         name: ref.name,
-        column: { name, type },
+        column: { name, type: (m[3] ?? 'unknown').replace(/,+$/, '') },
         ...base,
-      },
-    ]
+      })
+    }
+    if (added.length > 0) return added
   }
 
   if (/^create\s+policy\b/i.test(stripped)) {
@@ -201,6 +225,12 @@ function normalize(text: string, loc: SourceLocation): Statement[] {
   if (alterPolicyMatch) {
     const ref = parseQualifiedName(alterPolicyMatch[2] ?? '')
     const rest = alterPolicyMatch[3] ?? ''
+    // `ALTER POLICY ... RENAME TO x` is a rename, not a clause patch — its `TO`
+    // must not be read as a roles list. Match libpg (RenameStmt → other): leave
+    // the existing policy state untouched.
+    if (/^\s*rename\s+to\b/i.test(rest)) {
+      return [{ kind: 'other', ...base }]
+    }
     const clauseIdx = rest.search(/\busing\b|\bwith\s+check\b/i)
     const header = clauseIdx >= 0 ? rest.slice(0, clauseIdx) : rest
     const usingText = extractParenAfter(rest, /\busing\b/i)
@@ -254,6 +284,32 @@ function normalize(text: string, loc: SourceLocation): Statement[] {
       .split(',')
       .map((s) => s.trim().replace(/^"|"$/g, ''))
       .filter(Boolean)
+
+  // `REVOKE GRANT OPTION FOR ...` removes only the re-grant ability; the
+  // privilege itself survives — leave the folded state untouched (libpg parity).
+  if (/^revoke\s+grant\s+option\s+for\b/i.test(stripped)) {
+    return [{ kind: 'other', ...base }]
+  }
+
+  // ALTER DEFAULT PRIVILEGES [IN SCHEMA s[, ...]] GRANT|REVOKE <privs> ON TABLES TO|FROM <roles>
+  const adpMatch =
+    /^alter\s+default\s+privileges\b([\s\S]*?)\b(grant|revoke)\s+([\s\S]+?)\s+on\s+tables\s+(?:to|from)\s+([\s\S]+)$/i.exec(
+      stripped,
+    )
+  if (adpMatch) {
+    const scope = adpMatch[1] ?? ''
+    const schemasMatch = /\bin\s+schema\s+([\w",\s]+?)\s*$/i.exec(scope)
+    return [
+      {
+        kind: 'alterDefaultPrivileges',
+        isGrant: (adpMatch[2] ?? '').toLowerCase() === 'grant',
+        privileges: privList(adpMatch[3] ?? ''),
+        schemas: schemasMatch ? schemaList(schemasMatch[1] ?? '') : [],
+        grantees: roleList(adpMatch[4] ?? ''),
+        ...base,
+      },
+    ]
+  }
 
   const revokeAllMatch =
     /^revoke\s+([\s\S]+?)\s+on\s+all\s+tables\s+in\s+schema\s+([\w",\s]+?)\s+from\s+([\s\S]+)$/i.exec(
@@ -387,6 +443,20 @@ function normalize(text: string, loc: SourceLocation): Statement[] {
   if (dropTableMatch) {
     const ref = parseQualifiedName(dropTableMatch[1] ?? '')
     return [{ kind: 'dropTable', schema: ref.schema, name: ref.name, ...base }]
+  }
+
+  const dropViewMatch = /^drop\s+(?:materialized\s+)?view\s+(?:if\s+exists\s+)?("?[\w".]+"?)/i.exec(
+    stripped,
+  )
+  if (dropViewMatch) {
+    const ref = parseQualifiedName(dropViewMatch[1] ?? '')
+    return [{ kind: 'dropView', schema: ref.schema, name: ref.name, ...base }]
+  }
+
+  const dropFunctionMatch = /^drop\s+function\s+(?:if\s+exists\s+)?("?[\w".]+"?)/i.exec(stripped)
+  if (dropFunctionMatch) {
+    const ref = parseQualifiedName((dropFunctionMatch[1] ?? '').replace(/\(.*$/, ''))
+    return [{ kind: 'dropFunction', schema: ref.schema, name: ref.name, ...base }]
   }
 
   return [{ kind: 'other', ...base }]

@@ -31,7 +31,12 @@ These are out of scope or tracked as open issues — contributions welcome.
 - **`REVOKE` is applied conservatively** — a grant is only cleared when a later
   `REVOKE` *fully* covers it (all of its grantees and privileges). A partial
   revoke leaves the grant in place (so `RLS005` keeps flagging — the safe
-  direction).
+  direction). Schema-wide and table-level grants/revokes interoperate (both act
+  on per-table grants), and `REVOKE GRANT OPTION FOR` correctly leaves the
+  underlying privilege in place.
+- **Policy renames** (`ALTER POLICY … RENAME TO`) are not modeled: the policy
+  stays tracked under its old name, and later `ALTER POLICY <newname>` patches
+  won't find it (fails conservative — existing findings are kept).
 - **`CREATE TABLE AS`** — the resulting column list is unknown, so column-level
   rules can't inspect it.
 - **Dynamically generated SQL** — policies created inside `DO $$ … EXECUTE … $$`

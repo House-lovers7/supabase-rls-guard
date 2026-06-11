@@ -25,7 +25,7 @@ export function skipLeadingTrivia(content: string, start: number, end = content.
   return i
 }
 
-/** Maps byte offsets within a file to 1-based line/column positions. */
+/** Maps string (UTF-16 code unit) offsets within a file to 1-based line/column positions. */
 export class LineIndex {
   private readonly starts: number[]
 
