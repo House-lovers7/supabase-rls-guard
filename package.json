@@ -65,11 +65,11 @@
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.3",
-    "@biomejs/biome": "^2.4.16",
-    "@types/node": "^25.9.2",
+    "@biomejs/biome": "^2.5.0",
+    "@types/node": "^25.9.3",
     "publint": "^0.3.21",
-    "tsdown": "^0.22.2",
+    "tsdown": "^0.22.3",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.9"
   }
 }
