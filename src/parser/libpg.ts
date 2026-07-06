@@ -228,6 +228,16 @@ function normalizeStatement(node: unknown, loc: SourceLocation, raw: string): St
     }
     case 'CreateTableAsStmt': {
       const rel = rangeVar(field(field(inner, 'into'), 'rel'))
+      if (asString(field(inner, 'objtype')) === 'OBJECT_MATVIEW') {
+        return [
+          {
+            kind: 'createMaterializedView',
+            schema: rel.schema,
+            name: rel.name,
+            ...base,
+          },
+        ]
+      }
       return [
         {
           kind: 'createTable',
@@ -383,11 +393,18 @@ function normalizeStatement(node: unknown, loc: SourceLocation, raw: string): St
           },
         ]
       }
-      if (removeType === 'OBJECT_VIEW' || removeType === 'OBJECT_MATVIEW') {
+      if (removeType === 'OBJECT_VIEW') {
         return objects.map((o) => {
           const items = stringValues(field(field(o, 'List'), 'items'))
           const [schema, name] = items.length >= 2 ? items : ['public', items[0] ?? '']
           return { kind: 'dropView' as const, schema: schema!, name: name!, ...base }
+        })
+      }
+      if (removeType === 'OBJECT_MATVIEW') {
+        return objects.map((o) => {
+          const items = stringValues(field(field(o, 'List'), 'items'))
+          const [schema, name] = items.length >= 2 ? items : ['public', items[0] ?? '']
+          return { kind: 'dropMaterializedView' as const, schema: schema!, name: name!, ...base }
         })
       }
       if (removeType === 'OBJECT_FUNCTION') {

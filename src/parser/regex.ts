@@ -419,6 +419,20 @@ function normalize(text: string, loc: SourceLocation): Statement[] {
     ]
   }
 
+  const materializedViewMatch =
+    /^create\s+materialized\s+view\s+(?:if\s+not\s+exists\s+)?("?[\w".]+"?)/i.exec(stripped)
+  if (materializedViewMatch) {
+    const ref = parseQualifiedName(materializedViewMatch[1] ?? '')
+    return [
+      {
+        kind: 'createMaterializedView',
+        schema: ref.schema,
+        name: ref.name,
+        ...base,
+      },
+    ]
+  }
+
   const funcMatch = /^create\s+(?:or\s+replace\s+)?function\s+("?[\w".]+"?)/i.exec(stripped)
   if (funcMatch) {
     const ref = parseQualifiedName((funcMatch[1] ?? '').replace(/\(.*$/, ''))
@@ -445,9 +459,14 @@ function normalize(text: string, loc: SourceLocation): Statement[] {
     return [{ kind: 'dropTable', schema: ref.schema, name: ref.name, ...base }]
   }
 
-  const dropViewMatch = /^drop\s+(?:materialized\s+)?view\s+(?:if\s+exists\s+)?("?[\w".]+"?)/i.exec(
-    stripped,
-  )
+  const dropMaterializedViewMatch =
+    /^drop\s+materialized\s+view\s+(?:if\s+exists\s+)?("?[\w".]+"?)/i.exec(stripped)
+  if (dropMaterializedViewMatch) {
+    const ref = parseQualifiedName(dropMaterializedViewMatch[1] ?? '')
+    return [{ kind: 'dropMaterializedView', schema: ref.schema, name: ref.name, ...base }]
+  }
+
+  const dropViewMatch = /^drop\s+view\s+(?:if\s+exists\s+)?("?[\w".]+"?)/i.exec(stripped)
   if (dropViewMatch) {
     const ref = parseQualifiedName(dropViewMatch[1] ?? '')
     return [{ kind: 'dropView', schema: ref.schema, name: ref.name, ...base }]

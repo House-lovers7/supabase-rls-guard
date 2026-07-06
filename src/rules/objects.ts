@@ -1,3 +1,4 @@
+import { exposedMaterializedViews } from '../core/schema-state.js'
 import type { Finding, Rule } from '../core/types.js'
 import { finding, isAllowlisted, splinterDocs } from './util.js'
 
@@ -53,6 +54,36 @@ export const securityDefinerView: Rule = {
           message: `View ${v.schema}.${v.name} is not security_invoker, so it runs with the creator's privileges and bypasses the querying user's RLS.`,
           fix: `ALTER VIEW ${v.schema}.${v.name} SET (security_invoker = on);`,
           docs: splinterDocs('0010_security_definer_view'),
+          loc: v.definedAt,
+        }),
+      )
+    }
+    return findings
+  },
+}
+
+/** RLS012 — a materialized view in an exposed schema is API-readable but cannot carry RLS. */
+export const materializedViewInApi: Rule = {
+  id: 'RLS012',
+  name: 'materialized_view_in_api',
+  defaultSeverity: 'critical',
+  splinter: '0016',
+  description:
+    'A materialized view in an API-exposed schema can be served by the API but cannot carry RLS.',
+  docs: splinterDocs('0016_materialized_view_in_api'),
+  evaluate({ state, config }) {
+    const findings: Finding[] = []
+    for (const v of exposedMaterializedViews(state)) {
+      if (isAllowlisted(config, v.schema, v.name)) continue
+      findings.push(
+        finding({
+          ruleId: 'RLS012',
+          ruleName: 'materialized_view_in_api',
+          severity: 'critical',
+          target: `${v.schema}.${v.name}`,
+          message: `Materialized view ${v.schema}.${v.name} is in an API-exposed schema but cannot carry Row Level Security policies.`,
+          fix: 'Move the materialized view to a non-exposed schema, expose a security_invoker view over it, or restrict API role privileges.',
+          docs: splinterDocs('0016_materialized_view_in_api'),
           loc: v.definedAt,
         }),
       )

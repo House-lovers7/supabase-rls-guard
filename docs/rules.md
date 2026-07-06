@@ -146,6 +146,12 @@ create function public.f() returns void language plpgsql
   set search_path = '' as $$ … $$;
 ```
 
+### RLS012 · `materialized_view_in_api` · Critical · Splinter 0016
+
+A materialized view in an exposed schema can be served by the Data API, but it
+cannot carry Row Level Security policies. Move it to a non-exposed schema,
+expose a `security_invoker` view over it, or restrict API role privileges.
+
 ### RLS013 · `update_policy_missing_with_check` · Info
 
 An `UPDATE` (or `FOR ALL`) policy with `USING` but no `WITH CHECK`. This is

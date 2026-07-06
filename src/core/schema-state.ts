@@ -9,7 +9,13 @@
  */
 
 import { aggregateExprs } from './policy.js'
-import type { SchemaState, SourceLocation, Statement, TableState } from './types.js'
+import type {
+  MaterializedViewState,
+  SchemaState,
+  SourceLocation,
+  Statement,
+  TableState,
+} from './types.js'
 
 /** True when a REVOKE fully covers a recorded grant (conservative: keep the grant if unsure). */
 function revokeCovers(
@@ -31,6 +37,7 @@ export function createEmptyState(exposedSchemas: string[]): SchemaState {
   return {
     tables: new Map(),
     views: [],
+    materializedViews: [],
     functions: [],
     schemas: new Set(['public']),
     exposedSchemas,
@@ -214,6 +221,18 @@ function applyStatement(state: SchemaState, stmt: Statement): void {
       })
       break
     }
+    case 'createMaterializedView': {
+      state.schemas.add(stmt.schema)
+      state.materializedViews = state.materializedViews.filter(
+        (v) => !(v.schema === stmt.schema && v.name === stmt.name),
+      )
+      state.materializedViews.push({
+        schema: stmt.schema,
+        name: stmt.name,
+        definedAt: stmt.loc,
+      })
+      break
+    }
     case 'createFunction': {
       state.schemas.add(stmt.schema)
       state.functions = state.functions.filter(
@@ -235,6 +254,12 @@ function applyStatement(state: SchemaState, stmt: Statement): void {
     }
     case 'dropView': {
       state.views = state.views.filter((v) => !(v.schema === stmt.schema && v.name === stmt.name))
+      break
+    }
+    case 'dropMaterializedView': {
+      state.materializedViews = state.materializedViews.filter(
+        (v) => !(v.schema === stmt.schema && v.name === stmt.name),
+      )
       break
     }
     case 'dropFunction': {
@@ -259,4 +284,9 @@ export function exposedTables(state: SchemaState): TableState[] {
   return [...state.tables.values()].filter(
     (t) => t.created && !t.dropped && state.exposedSchemas.includes(t.schema),
   )
+}
+
+/** Materialized views that live in an API-exposed schema. */
+export function exposedMaterializedViews(state: SchemaState): MaterializedViewState[] {
+  return state.materializedViews.filter((v) => state.exposedSchemas.includes(v.schema))
 }

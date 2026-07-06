@@ -1,6 +1,11 @@
 import type { Finding, Rule, RuleContext, RuleMeta } from '../core/types.js'
 import { broadGrantToAnon } from './grants.js'
-import { authUsersExposed, functionSearchPathMutable, securityDefinerView } from './objects.js'
+import {
+  authUsersExposed,
+  functionSearchPathMutable,
+  materializedViewInApi,
+  securityDefinerView,
+} from './objects.js'
 import {
   authUidNotWrapped,
   multiplePermissivePolicies,
@@ -31,6 +36,7 @@ export const ALL_RULES: Rule[] = [
   policyReferencesUserMetadata, // RLS009
   securityDefinerView, // RLS010
   functionSearchPathMutable, // RLS011
+  materializedViewInApi, // RLS012
   updatePolicyMissingWithCheck, // RLS013
   authUsersExposed, // RLS015
   policyUsesAuthRole, // RLS016

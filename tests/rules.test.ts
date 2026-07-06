@@ -191,6 +191,30 @@ describe('RLS011 function_search_path_mutable', () => {
   })
 })
 
+describe('RLS012 materialized_view_in_api', () => {
+  it('fires for a materialized view in an exposed schema', async () => {
+    const sql = 'create materialized view public.mv as select 1;'
+    expect(hasRule(await analyze(sql, { backend: 'libpg' }), 'RLS012')).toBe(true)
+    expect(hasRule(await analyze(sql, { backend: 'regex' }), 'RLS012')).toBe(true)
+  })
+  it('does not fire outside exposed schemas', async () => {
+    const sql = 'create materialized view private.mv as select 1;'
+    expect(hasRule(await analyze(sql, { backend: 'libpg' }), 'RLS012')).toBe(false)
+    expect(hasRule(await analyze(sql, { backend: 'regex' }), 'RLS012')).toBe(false)
+  })
+  it('respects the publicTables allowlist', async () => {
+    const sql = 'create materialized view public.mv as select 1;'
+    const config = { publicTables: ['public.mv'] }
+    expect(hasRule(await analyze(sql, { backend: 'libpg', config }), 'RLS012')).toBe(false)
+    expect(hasRule(await analyze(sql, { backend: 'regex', config }), 'RLS012')).toBe(false)
+  })
+  it('does not fire after the materialized view is dropped', async () => {
+    const sql = 'create materialized view public.mv as select 1; drop materialized view public.mv;'
+    expect(hasRule(await analyze(sql, { backend: 'libpg' }), 'RLS012')).toBe(false)
+    expect(hasRule(await analyze(sql, { backend: 'regex' }), 'RLS012')).toBe(false)
+  })
+})
+
 describe('RLS013 update_policy_missing_with_check', () => {
   it('fires for an UPDATE policy with USING but no WITH CHECK', async () => {
     const f = await analyze(
