@@ -134,6 +134,7 @@ export type Statement =
       referencesAuthUsers: boolean
     })
   | (Base & { kind: 'createMaterializedView'; schema: string; name: string })
+  | (Base & { kind: 'createForeignTable'; schema: string; name: string })
   | (Base & {
       kind: 'createFunction'
       schema: string
@@ -144,6 +145,7 @@ export type Statement =
   | (Base & { kind: 'dropTable'; schema: string; name: string })
   | (Base & { kind: 'dropView'; schema: string; name: string })
   | (Base & { kind: 'dropMaterializedView'; schema: string; name: string })
+  | (Base & { kind: 'dropForeignTable'; schema: string; name: string })
   | (Base & { kind: 'dropFunction'; schema: string; name: string })
   | (Base & {
       kind: 'alterDefaultPrivileges'
@@ -207,6 +209,12 @@ export interface MaterializedViewState {
   definedAt: SourceLocation
 }
 
+export interface ForeignTableState {
+  schema: string
+  name: string
+  definedAt: SourceLocation
+}
+
 export interface FunctionState {
   schema: string
   name: string
@@ -226,6 +234,7 @@ export interface SchemaState {
   tables: Map<string, TableState>
   views: ViewState[]
   materializedViews: MaterializedViewState[]
+  foreignTables: ForeignTableState[]
   functions: FunctionState[]
   schemas: Set<string>
   /** Schemas exposed over the Data API (default `['public']`). */

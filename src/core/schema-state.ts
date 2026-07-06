@@ -10,6 +10,9 @@
 
 import { aggregateExprs } from './policy.js'
 import type {
+  DefaultPrivilegeState,
+  ForeignTableState,
+  GrantState,
   MaterializedViewState,
   SchemaState,
   SourceLocation,
@@ -17,16 +20,73 @@ import type {
   TableState,
 } from './types.js'
 
-/** True when a REVOKE fully covers a recorded grant (conservative: keep the grant if unsure). */
-function revokeCovers(
+const TABLE_PRIVILEGES = [
+  'select',
+  'insert',
+  'update',
+  'delete',
+  'truncate',
+  'references',
+  'trigger',
+  'maintain',
+]
+
+function normalizePrivileges(privileges: string[] | 'all'): string[] {
+  if (privileges === 'all') return TABLE_PRIVILEGES
+  return [...new Set(privileges.map((p) => p.toLowerCase()).filter(Boolean))]
+}
+
+function normalizeRole(role: string): string {
+  return role.toLowerCase()
+}
+
+function grantState(
+  grant: { privileges: string[] | 'all'; grantees: string[]; loc: SourceLocation },
+  via?: GrantState['via'],
+): GrantState {
+  return {
+    privileges: normalizePrivileges(grant.privileges),
+    grantees: grant.grantees,
+    loc: grant.loc,
+    via,
+  }
+}
+
+function subtractGrant(
+  grant: GrantState,
   revoke: { privileges: string[] | 'all'; grantees: string[] },
-  granted: { privileges: string[] | 'all'; grantees: string[] },
-): boolean {
-  // every grantee of the grant must be among those being revoked
-  if (!granted.grantees.every((r) => revoke.grantees.includes(r))) return false
-  if (revoke.privileges === 'all') return true
-  if (granted.privileges === 'all') return false
-  return granted.privileges.every((p) => revoke.privileges.includes(p))
+): GrantState[] {
+  const revokedPrivileges = new Set(normalizePrivileges(revoke.privileges))
+  const revokedGrantees = new Set(revoke.grantees.map(normalizeRole))
+  if (revokedPrivileges.size === 0 || revokedGrantees.size === 0) return [grant]
+
+  const currentPrivileges = normalizePrivileges(grant.privileges)
+  const remaining: GrantState[] = []
+  for (const grantee of grant.grantees) {
+    const privileges = revokedGrantees.has(normalizeRole(grantee))
+      ? currentPrivileges.filter((p) => !revokedPrivileges.has(p))
+      : currentPrivileges
+    if (privileges.length > 0) {
+      remaining.push({ ...grant, privileges, grantees: [grantee] })
+    }
+  }
+  return remaining
+}
+
+function applyRevoke(
+  grants: GrantState[],
+  revoke: { privileges: string[] | 'all'; grantees: string[] },
+): GrantState[] {
+  return grants.flatMap((grant) => subtractGrant(grant, revoke))
+}
+
+function defaultPrivilegeState(stmt: Extract<Statement, { kind: 'alterDefaultPrivileges' }>) {
+  return {
+    schemas: stmt.schemas,
+    privileges: normalizePrivileges(stmt.privileges),
+    grantees: stmt.grantees,
+    loc: stmt.loc,
+  }
 }
 
 export function tableKey(schema: string, name: string): string {
@@ -38,6 +98,7 @@ export function createEmptyState(exposedSchemas: string[]): SchemaState {
     tables: new Map(),
     views: [],
     materializedViews: [],
+    foreignTables: [],
     functions: [],
     schemas: new Set(['public']),
     exposedSchemas,
@@ -160,10 +221,9 @@ function applyStatement(state: SchemaState, stmt: Statement): void {
       for (const obj of stmt.objects) {
         const table = getOrCreateTable(state, obj.schema, obj.name, stmt.loc)
         if (stmt.isGrant) {
-          table.grants.push({ privileges: stmt.privileges, grantees: stmt.grantees, loc: stmt.loc })
+          table.grants.push(grantState(stmt))
         } else {
-          // REVOKE: drop the grants it fully covers (conservative).
-          table.grants = table.grants.filter((g) => !revokeCovers(stmt, g))
+          table.grants = applyRevoke(table.grants, stmt)
         }
       }
       break
@@ -176,15 +236,10 @@ function applyStatement(state: SchemaState, stmt: Statement): void {
         state.schemas.add(schema)
         for (const table of liveTablesInSchema(state, schema)) {
           if (stmt.isGrant) {
-            table.grants.push({
-              privileges: stmt.privileges,
-              grantees: stmt.grantees,
-              loc: stmt.loc,
-              via: 'schemaGrant',
-            })
+            table.grants.push(grantState(stmt, 'schemaGrant'))
           } else {
-            // Cross-level by construction: this filters table-level grants too.
-            table.grants = table.grants.filter((g) => !revokeCovers(stmt, g))
+            // Cross-level by construction: this subtracts table-level grants too.
+            table.grants = applyRevoke(table.grants, stmt)
           }
         }
       }
@@ -192,20 +247,26 @@ function applyStatement(state: SchemaState, stmt: Statement): void {
     }
     case 'alterDefaultPrivileges': {
       if (stmt.isGrant) {
-        state.defaultPrivileges.push({
-          schemas: stmt.schemas,
-          privileges: stmt.privileges,
-          grantees: stmt.grantees,
-          loc: stmt.loc,
-        })
+        state.defaultPrivileges.push(defaultPrivilegeState(stmt))
       } else {
-        // ALTER DEFAULT PRIVILEGES ... REVOKE: drop fully-covered defaults with the same scope.
-        state.defaultPrivileges = state.defaultPrivileges.filter((dp) => {
+        const defaultPrivileges: DefaultPrivilegeState[] = []
+        for (const dp of state.defaultPrivileges) {
           const sameScope =
             (dp.schemas.length === 0 && stmt.schemas.length === 0) ||
             dp.schemas.every((s) => stmt.schemas.includes(s))
-          return !(sameScope && revokeCovers(stmt, dp))
-        })
+          if (!sameScope) {
+            defaultPrivileges.push(dp)
+            continue
+          }
+          for (const grant of subtractGrant(dp, stmt)) {
+            defaultPrivileges.push({
+              ...dp,
+              privileges: grant.privileges,
+              grantees: grant.grantees,
+            })
+          }
+        }
+        state.defaultPrivileges = defaultPrivileges
       }
       break
     }
@@ -227,6 +288,18 @@ function applyStatement(state: SchemaState, stmt: Statement): void {
         (v) => !(v.schema === stmt.schema && v.name === stmt.name),
       )
       state.materializedViews.push({
+        schema: stmt.schema,
+        name: stmt.name,
+        definedAt: stmt.loc,
+      })
+      break
+    }
+    case 'createForeignTable': {
+      state.schemas.add(stmt.schema)
+      state.foreignTables = state.foreignTables.filter(
+        (t) => !(t.schema === stmt.schema && t.name === stmt.name),
+      )
+      state.foreignTables.push({
         schema: stmt.schema,
         name: stmt.name,
         definedAt: stmt.loc,
@@ -262,6 +335,12 @@ function applyStatement(state: SchemaState, stmt: Statement): void {
       )
       break
     }
+    case 'dropForeignTable': {
+      state.foreignTables = state.foreignTables.filter(
+        (t) => !(t.schema === stmt.schema && t.name === stmt.name),
+      )
+      break
+    }
     case 'dropFunction': {
       state.functions = state.functions.filter(
         (f) => !(f.schema === stmt.schema && f.name === stmt.name),
@@ -289,4 +368,9 @@ export function exposedTables(state: SchemaState): TableState[] {
 /** Materialized views that live in an API-exposed schema. */
 export function exposedMaterializedViews(state: SchemaState): MaterializedViewState[] {
   return state.materializedViews.filter((v) => state.exposedSchemas.includes(v.schema))
+}
+
+/** Foreign tables that live in an API-exposed schema. */
+export function exposedForeignTables(state: SchemaState): ForeignTableState[] {
+  return state.foreignTables.filter((t) => state.exposedSchemas.includes(t.schema))
 }

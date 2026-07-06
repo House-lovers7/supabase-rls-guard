@@ -226,6 +226,17 @@ function normalizeStatement(node: unknown, loc: SourceLocation, raw: string): St
         },
       ]
     }
+    case 'CreateForeignTableStmt': {
+      const rel = rangeVar(field(field(inner, 'base'), 'relation'))
+      return [
+        {
+          kind: 'createForeignTable',
+          schema: rel.schema,
+          name: rel.name,
+          ...base,
+        },
+      ]
+    }
     case 'CreateTableAsStmt': {
       const rel = rangeVar(field(field(inner, 'into'), 'rel'))
       if (asString(field(inner, 'objtype')) === 'OBJECT_MATVIEW') {
@@ -405,6 +416,13 @@ function normalizeStatement(node: unknown, loc: SourceLocation, raw: string): St
           const items = stringValues(field(field(o, 'List'), 'items'))
           const [schema, name] = items.length >= 2 ? items : ['public', items[0] ?? '']
           return { kind: 'dropMaterializedView' as const, schema: schema!, name: name!, ...base }
+        })
+      }
+      if (removeType === 'OBJECT_FOREIGN_TABLE') {
+        return objects.map((o) => {
+          const items = stringValues(field(field(o, 'List'), 'items'))
+          const [schema, name] = items.length >= 2 ? items : ['public', items[0] ?? '']
+          return { kind: 'dropForeignTable' as const, schema: schema!, name: name!, ...base }
         })
       }
       if (removeType === 'OBJECT_FUNCTION') {

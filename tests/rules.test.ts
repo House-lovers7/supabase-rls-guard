@@ -215,6 +215,31 @@ describe('RLS012 materialized_view_in_api', () => {
   })
 })
 
+describe('RLS014 foreign_table_in_api', () => {
+  it('fires for a foreign table in an exposed schema', async () => {
+    const sql = 'create foreign table public.ft (id int) server remote;'
+    expect(hasRule(await analyze(sql, { backend: 'libpg' }), 'RLS014')).toBe(true)
+    expect(hasRule(await analyze(sql, { backend: 'regex' }), 'RLS014')).toBe(true)
+  })
+  it('does not fire outside exposed schemas', async () => {
+    const sql = 'create foreign table private.ft (id int) server remote;'
+    expect(hasRule(await analyze(sql, { backend: 'libpg' }), 'RLS014')).toBe(false)
+    expect(hasRule(await analyze(sql, { backend: 'regex' }), 'RLS014')).toBe(false)
+  })
+  it('respects the publicTables allowlist', async () => {
+    const sql = 'create foreign table public.ft (id int) server remote;'
+    const config = { publicTables: ['public.ft'] }
+    expect(hasRule(await analyze(sql, { backend: 'libpg', config }), 'RLS014')).toBe(false)
+    expect(hasRule(await analyze(sql, { backend: 'regex', config }), 'RLS014')).toBe(false)
+  })
+  it('does not fire after the foreign table is dropped', async () => {
+    const sql =
+      'create foreign table public.ft (id int) server remote; drop foreign table public.ft;'
+    expect(hasRule(await analyze(sql, { backend: 'libpg' }), 'RLS014')).toBe(false)
+    expect(hasRule(await analyze(sql, { backend: 'regex' }), 'RLS014')).toBe(false)
+  })
+})
+
 describe('RLS013 update_policy_missing_with_check', () => {
   it('fires for an UPDATE policy with USING but no WITH CHECK', async () => {
     const f = await analyze(
@@ -365,15 +390,50 @@ describe('#18 ALTER POLICY ... RENAME TO', () => {
 })
 
 describe('#21 GRANT/REVOKE semantics', () => {
+  it('partial REVOKE subtracts only the named grantee (libpg)', async () => {
+    const f = await analyze(
+      'create table public.t (id uuid); grant select on public.t to anon, authenticated; revoke select on public.t from anon;',
+      { backend: 'libpg' },
+    )
+    expect(hasRule(f, 'RLS005')).toBe(false)
+  })
+  it('partial REVOKE subtracts only the named privilege (libpg)', async () => {
+    const f = await analyze(
+      'create table public.t (id uuid); grant select, insert on public.t to anon; revoke insert on public.t from anon;',
+      { backend: 'libpg' },
+    )
+    expect(hasRule(f, 'RLS005')).toBe(true)
+  })
+  it('expands ALL PRIVILEGES so revoked data privileges clear RLS005 (libpg)', async () => {
+    const f = await analyze(
+      'create table public.t (id uuid); grant all privileges on public.t to anon; revoke select, insert, update, delete on public.t from anon;',
+      { backend: 'libpg' },
+    )
+    expect(hasRule(f, 'RLS005')).toBe(false)
+  })
   it('cross-level: schema-wide REVOKE ALL clears a table-level grant', async () => {
     const f = await analyze(
       'create table public.t (id uuid); grant select on public.t to anon; revoke all on all tables in schema public from anon;',
     )
     expect(hasRule(f, 'RLS005')).toBe(false)
   })
+  it('cross-level: schema-wide REVOKE subtracts one table-level privilege (libpg)', async () => {
+    const f = await analyze(
+      'create table public.t (id uuid); grant select, insert on public.t to anon; revoke insert on all tables in schema public from anon;',
+      { backend: 'libpg' },
+    )
+    expect(hasRule(f, 'RLS005')).toBe(true)
+  })
   it('cross-level: table-level REVOKE clears an expanded schema-wide grant', async () => {
     const f = await analyze(
       'create table public.t (id uuid); grant select on all tables in schema public to anon; revoke select on public.t from anon;',
+    )
+    expect(hasRule(f, 'RLS005')).toBe(false)
+  })
+  it('cross-level: table-level REVOKE subtracts from schema-wide ALL PRIVILEGES (libpg)', async () => {
+    const f = await analyze(
+      'create table public.t (id uuid); grant all privileges on all tables in schema public to anon; revoke select, insert, update, delete on public.t from anon;',
+      { backend: 'libpg' },
     )
     expect(hasRule(f, 'RLS005')).toBe(false)
   })
@@ -441,6 +501,13 @@ describe('#24 REVOKE GRANT OPTION FOR', () => {
     'create table public.t (id uuid); grant select on public.t to anon; revoke grant option for select on public.t from anon;'
   it('keeps the underlying grant — RLS005 still fires (libpg)', async () => {
     expect(hasRule(await analyze(sql, { backend: 'libpg' }), 'RLS005')).toBe(true)
+  })
+  it('leaves other privileges untouched when revoking only a grant option (libpg)', async () => {
+    const f = await analyze(
+      'create table public.t (id uuid); grant select, insert on public.t to anon with grant option; revoke grant option for insert on public.t from anon;',
+      { backend: 'libpg' },
+    )
+    expect(hasRule(f, 'RLS005')).toBe(true)
   })
   it('keeps the underlying grant — RLS005 still fires (regex)', async () => {
     expect(hasRule(await analyze(sql, { backend: 'regex' }), 'RLS005')).toBe(true)

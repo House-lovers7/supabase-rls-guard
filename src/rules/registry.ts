@@ -2,6 +2,7 @@ import type { Finding, Rule, RuleContext, RuleMeta } from '../core/types.js'
 import { broadGrantToAnon } from './grants.js'
 import {
   authUsersExposed,
+  foreignTableInApi,
   functionSearchPathMutable,
   materializedViewInApi,
   securityDefinerView,
@@ -38,6 +39,7 @@ export const ALL_RULES: Rule[] = [
   functionSearchPathMutable, // RLS011
   materializedViewInApi, // RLS012
   updatePolicyMissingWithCheck, // RLS013
+  foreignTableInApi, // RLS014
   authUsersExposed, // RLS015
   policyUsesAuthRole, // RLS016
   multiplePermissivePolicies, // RLS017

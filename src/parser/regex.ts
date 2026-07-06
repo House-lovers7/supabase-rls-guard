@@ -433,6 +433,20 @@ function normalize(text: string, loc: SourceLocation): Statement[] {
     ]
   }
 
+  const foreignTableMatch =
+    /^create\s+foreign\s+table\s+(?:if\s+not\s+exists\s+)?("?[\w".]+"?)/i.exec(stripped)
+  if (foreignTableMatch) {
+    const ref = parseQualifiedName(foreignTableMatch[1] ?? '')
+    return [
+      {
+        kind: 'createForeignTable',
+        schema: ref.schema,
+        name: ref.name,
+        ...base,
+      },
+    ]
+  }
+
   const funcMatch = /^create\s+(?:or\s+replace\s+)?function\s+("?[\w".]+"?)/i.exec(stripped)
   if (funcMatch) {
     const ref = parseQualifiedName((funcMatch[1] ?? '').replace(/\(.*$/, ''))
@@ -464,6 +478,14 @@ function normalize(text: string, loc: SourceLocation): Statement[] {
   if (dropMaterializedViewMatch) {
     const ref = parseQualifiedName(dropMaterializedViewMatch[1] ?? '')
     return [{ kind: 'dropMaterializedView', schema: ref.schema, name: ref.name, ...base }]
+  }
+
+  const dropForeignTableMatch = /^drop\s+foreign\s+table\s+(?:if\s+exists\s+)?("?[\w".]+"?)/i.exec(
+    stripped,
+  )
+  if (dropForeignTableMatch) {
+    const ref = parseQualifiedName(dropForeignTableMatch[1] ?? '')
+    return [{ kind: 'dropForeignTable', schema: ref.schema, name: ref.name, ...base }]
   }
 
   const dropViewMatch = /^drop\s+view\s+(?:if\s+exists\s+)?("?[\w".]+"?)/i.exec(stripped)

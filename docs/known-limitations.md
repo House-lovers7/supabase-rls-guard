@@ -12,14 +12,15 @@ a security tool is dangerous the moment it is over-trusted.
 
 ## What it detects well
 
-- The 13 rules in [rules.md](./rules.md) (RLS not enabled, policy without RLS,
-  always-true policies, `user_metadata` trust, definer views, mutable
-  `search_path`, sensitive columns on unprotected tables, broad `anon` grants,
-  unwrapped `auth.uid()`, etc.).
+- The rules in [rules.md](./rules.md) (RLS not enabled, policy without RLS,
+  always-true policies, `user_metadata` trust, definer views, materialized or
+  foreign tables in exposed schemas, mutable `search_path`, sensitive columns on
+  unprotected tables, broad `anon` grants, unwrapped `auth.uid()`, etc.).
 - **Cross-file truth.** All migrations are folded in timestamp order, so RLS
   enabled in a later migration than the `CREATE TABLE` is correctly *not* flagged.
-- Policies/tables/views/functions/grants declared in your `.sql` migrations,
-  parsed with the real PostgreSQL grammar (libpg-query).
+- Policies/tables/views/materialized views/foreign tables/functions/grants
+  declared in your `.sql` migrations, parsed with the real PostgreSQL grammar
+  (libpg-query).
 
 ## What it does NOT detect (yet)
 
@@ -28,12 +29,12 @@ These are out of scope or tracked as open issues — contributions welcome.
 - **Schema created outside migrations.** Tables/columns created via the Supabase
   dashboard or SQL editor are not in your repo, so the tool can't see them. (Run
   the Supabase Advisor for the live database.)
-- **`REVOKE` is applied conservatively** — a grant is only cleared when a later
-  `REVOKE` *fully* covers it (all of its grantees and privileges). A partial
-  revoke leaves the grant in place (so `RLS005` keeps flagging — the safe
-  direction). Schema-wide and table-level grants/revokes interoperate (both act
-  on per-table grants), and `REVOKE GRANT OPTION FOR` correctly leaves the
-  underlying privilege in place.
+- **`REVOKE` grantor chains are not modeled.** Plain `REVOKE` is folded per
+  grantee and per privilege, including `ALL PRIVILEGES` expansion and
+  table-level/schema-wide interop. `REVOKE GRANT OPTION FOR` leaves the
+  underlying privilege in place. The static fold does not model `GRANTED BY`,
+  grantor chains, `CASCADE` dependency revocation, or runtime failures from
+  insufficient grant options; ambiguous cases keep the safer remaining grant.
 - **Policy renames** (`ALTER POLICY … RENAME TO`) are not modeled: the policy
   stays tracked under its old name, and later `ALTER POLICY <newname>` patches
   won't find it (fails conservative — existing findings are kept).

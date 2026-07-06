@@ -68,7 +68,8 @@ that has no RLS hands unauthenticated users direct access. Schema-wide grants
 (`GRANT … ON ALL TABLES IN SCHEMA public TO anon`) are expanded to the tables
 existing at that point — matching real Postgres semantics — and
 `ALTER DEFAULT PRIVILEGES … GRANT … ON TABLES TO anon` is applied to tables
-created afterwards. `REVOKE` (at either level) clears the grants it fully covers.
+created afterwards. `REVOKE` (at either level) subtracts the named grantees and
+privileges; `REVOKE GRANT OPTION FOR` does not remove the underlying privilege.
 
 ```sql
 -- ✗ flagged (no RLS on public.public_notes)
@@ -161,6 +162,12 @@ expression as the new-row check, so the common ownership pattern
 reassigning a row to someone else. The lint is an informational nudge: add an
 explicit `WITH CHECK` only when the write constraint should differ from the read
 constraint.
+
+### RLS014 · `foreign_table_in_api` · Critical · Splinter 0017
+
+A foreign table in an exposed schema can be served by the Data API, but it
+bypasses Row Level Security entirely. Move it to a non-exposed schema, expose a
+`security_invoker` view over it, or restrict API role privileges.
 
 ### RLS015 · `auth_users_exposed` · Critical · Splinter 0002
 

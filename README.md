@@ -102,6 +102,7 @@ the live list, or see [docs/rules.md](./docs/rules.md) for details and fixes.
 | `RLS011` | Warning | A function without a fixed `search_path` |
 | `RLS012` | Critical | A materialized view in an exposed schema is API-served but cannot carry RLS |
 | `RLS013` | Info | An `UPDATE` policy omits `WITH CHECK` (Postgres reuses `USING`) — be explicit if intended |
+| `RLS014` | Critical | A foreign table in an exposed schema is API-served but bypasses RLS |
 | `RLS015` | Critical | A view in an exposed schema selects from `auth.users` (leaks user PII) |
 | `RLS016` | Info | A policy gates on `auth.role()` in its predicate — prefer the `TO <role>` clause |
 | `RLS017` | Warning | Multiple permissive policies for the same role + command (OR-ed on every row) |

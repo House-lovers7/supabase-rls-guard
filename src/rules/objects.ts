@@ -1,4 +1,4 @@
-import { exposedMaterializedViews } from '../core/schema-state.js'
+import { exposedForeignTables, exposedMaterializedViews } from '../core/schema-state.js'
 import type { Finding, Rule } from '../core/types.js'
 import { finding, isAllowlisted, splinterDocs } from './util.js'
 
@@ -85,6 +85,36 @@ export const materializedViewInApi: Rule = {
           fix: 'Move the materialized view to a non-exposed schema, expose a security_invoker view over it, or restrict API role privileges.',
           docs: splinterDocs('0016_materialized_view_in_api'),
           loc: v.definedAt,
+        }),
+      )
+    }
+    return findings
+  },
+}
+
+/** RLS014 — a foreign table in an exposed schema is API-readable but cannot carry RLS. */
+export const foreignTableInApi: Rule = {
+  id: 'RLS014',
+  name: 'foreign_table_in_api',
+  defaultSeverity: 'critical',
+  splinter: '0017',
+  description:
+    'A foreign table in an API-exposed schema can be served by the API but cannot carry RLS.',
+  docs: splinterDocs('0017_foreign_table_in_api'),
+  evaluate({ state, config }) {
+    const findings: Finding[] = []
+    for (const t of exposedForeignTables(state)) {
+      if (isAllowlisted(config, t.schema, t.name)) continue
+      findings.push(
+        finding({
+          ruleId: 'RLS014',
+          ruleName: 'foreign_table_in_api',
+          severity: 'critical',
+          target: `${t.schema}.${t.name}`,
+          message: `Foreign table ${t.schema}.${t.name} is in an API-exposed schema but cannot carry Row Level Security policies.`,
+          fix: 'Move the foreign table to a non-exposed schema, expose a security_invoker view over it, or restrict API role privileges.',
+          docs: splinterDocs('0017_foreign_table_in_api'),
+          loc: t.definedAt,
         }),
       )
     }
