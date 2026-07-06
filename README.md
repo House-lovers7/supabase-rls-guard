@@ -83,7 +83,7 @@ yet. (Aggregate only — no project names, schemas, or data are published.)
 
 ## What it checks
 
-16 rules, aligned with Supabase's official [Splinter](https://github.com/supabase/splinter)
+18 rules, aligned with Supabase's official [Splinter](https://github.com/supabase/splinter)
 lint catalog where they overlap. Run `npx supabase-rls-guard --list-rules` for
 the live list, or see [docs/rules.md](./docs/rules.md) for details and fixes.
 

@@ -1,6 +1,6 @@
 # Rules
 
-Supabase RLS Guard ships 16 rules. Where a rule corresponds to a check in
+Supabase RLS Guard ships 18 rules. Where a rule corresponds to a check in
 Supabase's official [Splinter](https://github.com/supabase/splinter) linter, the
 Splinter code is noted so you can cross-reference the dashboard advisor.
 
