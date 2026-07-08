@@ -58,6 +58,14 @@ of every finding) were fixed — see issues #18–#34.
 - `loadConfig` no longer crashes when a search start directory is supplied
   (cosmiconfig `stopDir` misuse).
 
+### Fixed — allowlist scoping
+
+- **Unqualified `publicTables` entries no longer match same-named tables in
+  other schemas.** An entry like `"blog_posts"` now only allowlists
+  `public.blog_posts`; it no longer silently suppresses findings for
+  `private.blog_posts`, `admin.blog_posts`, etc. Schema-qualified entries
+  (e.g. `"public.blog_posts"`) are unaffected.
+
 ## [0.2.0]
 
 ### Added
