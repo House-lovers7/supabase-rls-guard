@@ -7,6 +7,13 @@ caveat that, pre-1.0, minor versions may include breaking changes).
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.2.0] - 2026-07-12
+
+First published release (v0.2.0 was versioned but never tagged or published;
+this release folds the audit batch below into it).
+
 Audit batch: 17 bugs found by a multi-agent audit (with adversarial verification
 of every finding) were fixed — see issues #18–#34.
 
@@ -65,8 +72,6 @@ of every finding) were fixed — see issues #18–#34.
   `public.blog_posts`; it no longer silently suppresses findings for
   `private.blog_posts`, `admin.blog_posts`, etc. Schema-qualified entries
   (e.g. `"public.blog_posts"`) are unaffected.
-
-## [0.2.0]
 
 ### Added
 
