@@ -26,8 +26,8 @@
   "homepage": "https://github.com/House-lovers7/supabase-rls-guard#readme",
   "type": "module",
   "bin": {
-    "supabase-rls-guard": "./dist/cli.mjs",
-    "rlsguard": "./dist/cli.mjs"
+    "supabase-rls-guard": "dist/cli.mjs",
+    "rlsguard": "dist/cli.mjs"
   },
   "exports": {
     ".": {
