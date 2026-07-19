@@ -7,7 +7,7 @@
 
 import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -41,6 +41,70 @@ describe.skipIf(!existsSync(CLI))('CLI (built binary)', () => {
       expect(failed.status).toBe(2)
       expect(failed.stderr).toContain('no .sql files')
       expect(run([dir, '--allow-empty']).status).toBe(0)
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('strict mode rejects a parser fallback as an incomplete scan', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'rlsguard-fallback-'))
+    try {
+      await writeFile(join(dir, '001.sql'), 'select 1; this is not valid PostgreSQL;\n')
+
+      const permissive = run([dir, '--no-color'])
+      expect(permissive.status).toBe(0)
+      expect(permissive.stdout).not.toContain('✔ No RLS issues')
+      expect(permissive.stdout).toContain('scan warning')
+      expect(permissive.stderr).toContain('used regex fallback')
+
+      const strict = run([dir, '--strict', '--format', 'json'])
+      expect(strict.status).toBe(2)
+      expect(() => JSON.parse(strict.stdout)).not.toThrow()
+      expect(strict.stderr).toContain('used regex fallback')
+      expect(strict.stderr).toContain('strict mode rejected 1 scan warning')
+
+      const quiet = run([dir, '--strict', '--quiet'])
+      expect(quiet.status).toBe(2)
+      expect(quiet.stderr).not.toContain('warning:')
+      expect(quiet.stderr).toContain('strict mode rejected 1 scan warning')
+
+      expect(run([dir, '--backend', 'libpg']).status).toBe(2)
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('strict mode rejects a skipped unreadable SQL entry', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'rlsguard-unreadable-'))
+    try {
+      await writeFile(join(dir, '001.sql'), 'select 1;\n')
+      await symlink(join(dir, 'missing-target.sql'), join(dir, '002.sql'))
+
+      expect(run([dir]).status).toBe(0)
+      const strict = run([dir, '--strict'])
+      expect(strict.status).toBe(2)
+      expect(strict.stderr).toContain('skipped unreadable entry')
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps finding failures distinct from incomplete-scan failures', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'rlsguard-exit-priority-'))
+    try {
+      await writeFile(
+        join(dir, '001.sql'),
+        'create table public.t (id int); alter table public.t enable row level security;\n',
+      )
+      // RLS002 is a warning-severity finding, not an operational scan warning.
+      expect(run([dir, '--strict']).status).toBe(1)
+
+      await writeFile(
+        join(dir, '001.sql'),
+        'create table public.t (id int); this is not valid PostgreSQL;\n',
+      )
+      // Incomplete analysis (exit 2) takes precedence over a Critical finding (exit 1).
+      expect(run([dir, '--strict']).status).toBe(2)
     } finally {
       await rm(dir, { recursive: true, force: true })
     }

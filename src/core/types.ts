@@ -341,6 +341,9 @@ export interface ScanResult {
   findings: Finding[]
   summary: ScanSummary
   config: ResolvedConfig
-  /** Non-fatal warnings surfaced during the scan (config + parser fallbacks). */
+  /**
+   * Non-fatal library warnings (config, discovery, parser fallback).
+   * The CLI treats any of these as an incomplete-scan tool error under `--strict`.
+   */
   warnings: string[]
 }

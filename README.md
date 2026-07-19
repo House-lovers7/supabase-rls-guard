@@ -184,7 +184,7 @@ npx supabase-rls-guard ./supabase/migrations
 npx supabase-rls-guard --format json
 npx supabase-rls-guard --format sarif > rls.sarif
 
-# fail CI on warnings too
+# fail CI on warnings too, and reject incomplete scans (exit 2)
 npx supabase-rls-guard --strict
 
 # list all rules
@@ -196,7 +196,7 @@ npx supabase-rls-guard --list-rules
 | Flag | Description |
 | --- | --- |
 | `--format <text\|json\|github\|sarif>` | Output format (default `text`) |
-| `--strict` | Treat warnings as failures |
+| `--strict` | Fail on warning-severity findings, and reject incomplete scans (parser fallback, skipped unreadable files, invalid config fields) with exit 2 |
 | `--fail-on <critical\|warning\|info>` | Severity that triggers a non-zero exit (default `critical`) |
 | `--config <file>` | Use a specific config file |
 | `--disable RLS002,RLS011` | Disable rules for this run |
@@ -212,7 +212,7 @@ npx supabase-rls-guard --list-rules
 | --- | --- |
 | `0` | No findings at or above the threshold |
 | `1` | Findings at or above the threshold |
-| `2` | Tool/config error (bad flag value, path not found, **zero `.sql` files scanned** — see `--allow-empty`) |
+| `2` | Tool/config error (bad flag value, path not found, **zero `.sql` files scanned** — see `--allow-empty`), or an **incomplete scan under `--strict`** (parser fallback, skipped unreadable file, invalid config field) |
 
 ## CI integration
 
@@ -302,3 +302,17 @@ same class of checks left, to before you ship.
 [MIT](./LICENSE) © House-lovers7.
 
 This project is independent and not affiliated with or endorsed by Supabase Inc.
+
+<!-- BEGIN GENERATED ENGINEERING HANDBOOK -->
+## Engineering handbook
+
+- [Start here](./docs/engineering/README.md)
+- [Architecture / system diagram](./docs/engineering/02_architecture.md)
+- [API](./docs/engineering/04_api.md) / [Data model](./docs/engineering/05_data_model.md) / [Screens](./docs/engineering/06_screen_design.md)
+- Detected check: `npm run dev  # tsdown --watch`, `npm run build  # tsdown`, `npm run typecheck  # tsc --noEmit`, `npm run lint  # biome check .`
+- Snapshot: API 0 / entity 9 / screen 0 / test files 10
+- Data sources: `examples/unsafe-project/supabase/migrations/001_create_users.sql`, `examples/unsafe-project/supabase/migrations/002_create_todos.sql`, `examples/unsafe-project/supabase/migrations/010_settings.sql`, `examples/unsafe-project/supabase/migrations/009_grants.sql`, `examples/unsafe-project/supabase/migrations/005_profiles.sql`, `examples/unsafe-project/supabase/migrations/011_legacy.sql`, `examples/unsafe-project/supabase/migrations/004_posts.sql`, `examples/unsafe-project/supabase/migrations/006_api_keys.sql`, `examples/unsafe-project/supabase/migrations/007_admin_flags.sql`, `examples/safe-project/supabase/migrations/001_profiles.sql`
+- Handoff gaps: 0 open (3 resolved 2026-07-19) — [details](./docs/engineering/00_one_pager.md#引継ぎ時の未解決ギャップ)
+
+> Generated from the current checkout. Existing ADR/schema/runbook remains authoritative; production state is not asserted.
+<!-- END GENERATED ENGINEERING HANDBOOK -->

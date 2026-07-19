@@ -7,7 +7,37 @@ caveat that, pre-1.0, minor versions may include breaking changes).
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **`examples/README.md`**: every bundled migration (11 unsafe + 3 safe) mapped
+  to what it demonstrates and the findings expected against the final folded
+  state; engineering docs gained a hand-verified public-interface inventory
+  (CLI + library entrypoints) and an executable npm rollback procedure,
+  closing all three P1 handoff gaps.
+- **RLS spot-audit service docs** (`docs/service/`): offer, order/intake and
+  report templates, a synthetic sample report (from `examples/unsafe-project`),
+  an operator runbook with a bounded lifecycle (recheck ≤30 days, customer-data
+  deletion ≤37 days after first delivery), and ADR-0001 fixing the boundary
+  that customer material never enters the public repo. Consistency (single
+  offer, price cap, disclaimers, no overstated claims) is pinned by
+  `tests/service-docs.test.ts`.
+
+### Changed
+
+- **`--strict` now rejects incomplete scans with exit 2.** Operational scan
+  warnings (parser fallback to the regex backend, skipped unreadable entries,
+  invalid config fields) mean the analysis covered less than requested; under
+  `--strict` they are now a tool error (exit 2), kept distinct from
+  finding-based failures (exit 1). The rendered partial result stays on stdout
+  for review.
+- **The text reporter no longer renders an incomplete scan as a clean pass.**
+  With zero findings but pending scan warnings it prints a yellow `⚠ … scan
+  warning(s) prevent a clean pass` line instead of the green `✔`, and appends a
+  `scan incomplete` suffix to finding summaries.
+- **Supply-chain hardening of CI and release**: dependency audit
+  (`pnpm audit --audit-level high`) and package validation (publint + attw) now
+  gate both CI and the release workflow; PRs touching dependencies run a pinned
+  `dependency-review` action; pnpm bumped to 11.x.
 
 ## [0.2.0] - 2026-07-12
 

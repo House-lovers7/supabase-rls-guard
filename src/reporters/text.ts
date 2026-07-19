@@ -31,6 +31,14 @@ export function renderText(result: ScanResult, enableColor = true): string {
   const lines: string[] = []
 
   if (findings.length === 0) {
+    if (result.warnings.length > 0) {
+      const count = result.warnings.length
+      return c.yellow(
+        `⚠ No RLS findings across ${summary.filesScanned} file(s), but ${count} scan warning${
+          count === 1 ? '' : 's'
+        } prevent a clean pass.`,
+      )
+    }
     return c.green(`✔ No RLS issues found across ${summary.filesScanned} file(s).`)
   }
 
@@ -49,10 +57,17 @@ export function renderText(result: ScanResult, enableColor = true): string {
   if (summary.warning) parts.push(c.yellow(`${summary.warning} warning`))
   if (summary.info) parts.push(c.cyan(`${summary.info} info`))
   const icon = summary.failed ? c.red('✖') : c.yellow('⚠')
+  const scanWarningSuffix = result.warnings.length
+    ? c.yellow(
+        ` · scan incomplete: ${result.warnings.length} scan warning${
+          result.warnings.length === 1 ? '' : 's'
+        }`,
+      )
+    : ''
   lines.push(
     `${icon} ${parts.join(', ')} across ${summary.filesScanned} file(s)${
       summary.failed ? c.red(` · failing (threshold: ${result.config.failOn})`) : ''
-    }`,
+    }${scanWarningSuffix}`,
   )
 
   return lines.join('\n')

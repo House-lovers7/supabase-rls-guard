@@ -26,9 +26,19 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm test
+      - name: Audit dependencies
+        run: pnpm audit:deps
+
+      - run: pnpm typecheck
+
+      - run: pnpm lint
 
       - run: pnpm build
+
+      - run: pnpm test
+
+      - name: Validate published package
+        run: pnpm validate:package
 
       # npm >= 11.5.1 (bundled with Node 24) publishes with OIDC provenance.
       - run: npm publish --access public

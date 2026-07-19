@@ -69,6 +69,12 @@ When libpg-query cannot parse a file, the tool falls back to a regex backend and
 resilient but less precise and may miss policies written in unusual syntax. You
 can force a backend with `--backend libpg|regex`.
 
+A scan that produced such warnings (parser fallback, skipped unreadable entry,
+invalid config field) is **incomplete**: it analyzed less than what you asked
+for. Without `--strict` the text reporter still refuses to render it as a clean
+`✔` pass; with `--strict` the CLI exits 2 (tool error, distinct from exit 1
+findings) so CI cannot silently accept a partial analysis.
+
 ## Tuning
 
 | Need | Mechanism |

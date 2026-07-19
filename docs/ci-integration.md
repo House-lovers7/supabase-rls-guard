@@ -97,7 +97,9 @@ rls-guard:
 
 ## Tuning the gate
 
-- `--strict` — also fail on warnings.
+- `--strict` — also fail on warnings, and reject incomplete scans (parser
+  fallback, skipped unreadable files, invalid config fields) with exit 2 so a
+  partial analysis can never pass as green.
 - `--fail-on warning` — set the exact threshold.
 - Commit a `.rlsguardrc.json` to share config (`publicTables`, disabled rules,
   severities) across the team and local runs.

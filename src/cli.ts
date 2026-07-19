@@ -67,7 +67,8 @@ const main = defineCommand({
     strict: {
       type: 'boolean',
       default: false,
-      description: 'Treat warnings as failures (exit non-zero)',
+      description:
+        'Fail on warning-severity findings and reject incomplete scans with operational warnings',
     },
     'fail-on': {
       type: 'string',
@@ -143,6 +144,20 @@ const main = defineCommand({
 
       if (!args.quiet) {
         for (const w of result.warnings) await write(process.stderr, `warning: ${w}\n`)
+      }
+
+      // Parser fallback, unreadable entries, and invalid config fields mean the
+      // result is incomplete. In strict mode they are tool errors (exit 2), not
+      // security findings (exit 1). Keep the rendered partial result on stdout
+      // so CI and operators still have evidence to review.
+      if (args.strict && result.warnings.length > 0) {
+        const count = result.warnings.length
+        await fail(
+          2,
+          `strict mode rejected ${count} scan warning${count === 1 ? '' : 's'}; the result is incomplete${
+            args.quiet ? ' (rerun without --quiet for details)' : ''
+          }`,
+        )
       }
 
       process.exit(result.summary.failed ? 1 : 0)

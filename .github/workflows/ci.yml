@@ -27,21 +27,22 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Audit dependencies
+        if: matrix.node-version == 24
+        run: pnpm audit:deps
+
       - name: Typecheck
         run: pnpm typecheck
 
       - name: Lint
         run: pnpm lint
 
-      - name: Test
-        run: pnpm test
-
       - name: Build
         run: pnpm build
 
+      # CLI tests spawn dist/cli.mjs and therefore must run after Build.
+      - name: Test
+        run: pnpm test
+
       - name: Validate published package
-        # ESM-only package: node10 / CJS-require resolutions are expected to be
-        # unsupported, so those rules are ignored.
-        run: |
-          pnpm dlx publint
-          pnpm dlx @arethetypeswrong/cli --pack --ignore-rules cjs-resolves-to-esm no-resolution
+        run: pnpm validate:package
