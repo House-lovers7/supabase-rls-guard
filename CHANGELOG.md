@@ -7,7 +7,18 @@ caveat that, pre-1.0, minor versions may include breaking changes).
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+- **`--strict` now rejects incomplete scans with exit 2.** Operational scan
+  warnings (parser fallback to the regex backend, skipped unreadable entries,
+  invalid config fields) mean the analysis covered less than requested; under
+  `--strict` they are now a tool error (exit 2), kept distinct from
+  finding-based failures (exit 1). The rendered partial result stays on stdout
+  for review.
+- **The text reporter no longer renders an incomplete scan as a clean pass.**
+  With zero findings but pending scan warnings it prints a yellow `⚠ … scan
+  warning(s) prevent a clean pass` line instead of the green `✔`, and appends a
+  `scan incomplete` suffix to finding summaries.
 
 ## [0.2.0] - 2026-07-12
 

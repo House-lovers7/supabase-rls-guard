@@ -13,7 +13,7 @@ export interface ConfigOverrides {
   configPath?: string
   /** From `--fail-on`. */
   failOn?: Severity
-  /** From `--strict` (lowers the gate to `warning`). */
+  /** From `--strict` (lowers the finding gate; the CLI also rejects scan warnings). */
   strict?: boolean
   /** From repeated `--disable RLSxxx`. */
   disableRules?: string[]

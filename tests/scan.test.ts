@@ -32,6 +32,19 @@ describe('scan integration', () => {
     expect(result.summary.failed).toBe(false)
   })
 
+  it('does not render an incomplete fallback scan as a clean result', async () => {
+    await withTmpDir(async (dir) => {
+      await writeFile(join(dir, '001.sql'), 'select 1; this is not valid PostgreSQL;\n')
+      const result = await scan({ path: dir })
+
+      expect(result.findings).toHaveLength(0)
+      expect(result.warnings.some((warning) => warning.includes('used regex fallback'))).toBe(true)
+      const output = render(result, 'text', { color: false })
+      expect(output).toContain('scan warning')
+      expect(output).not.toContain('✔ No RLS issues')
+    })
+  })
+
   it('does not flag a table whose RLS is enabled in a later migration', async () => {
     const result = await scan({ path: UNSAFE })
     expect(result.findings.some((f) => f.target.startsWith('public.todos'))).toBe(false)
