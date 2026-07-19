@@ -5,10 +5,11 @@ How a version of `supabase-rls-guard` reaches npm. The publish pipeline is
 it re-runs every gate (audit → typecheck → lint → build → test →
 validate:package) before `npm publish`.
 
-## One-time bootstrap (status 2026-07-19: NOT done yet)
+## One-time bootstrap (status 2026-07-20: NOT done yet)
 
 The package does not exist on the registry yet (`npm view supabase-rls-guard`
-→ 404). npm Trusted Publishing **cannot create a brand-new package** — the
+→ 404, re-checked 2026-07-20). The version that bootstraps it is **0.3.0** —
+0.1.0 and 0.2.0 were tagged in git but never published. npm Trusted Publishing **cannot create a brand-new package** — the
 trusted-publisher settings only exist for a published package
 ([npm docs](https://docs.npmjs.com/trusted-publishers/),
 [npm/cli#8544](https://github.com/npm/cli/issues/8544)). So the first release
