@@ -19,6 +19,10 @@ caveat that, pre-1.0, minor versions may include breaking changes).
   With zero findings but pending scan warnings it prints a yellow `⚠ … scan
   warning(s) prevent a clean pass` line instead of the green `✔`, and appends a
   `scan incomplete` suffix to finding summaries.
+- **Supply-chain hardening of CI and release**: dependency audit
+  (`pnpm audit --audit-level high`) and package validation (publint + attw) now
+  gate both CI and the release workflow; PRs touching dependencies run a pinned
+  `dependency-review` action; pnpm bumped to 11.x.
 
 ## [0.2.0] - 2026-07-12
 
