@@ -7,6 +7,8 @@ caveat that, pre-1.0, minor versions may include breaking changes).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-20
+
 ### Added
 
 - **`examples/README.md`**: every bundled migration (11 unsafe + 3 safe) mapped
@@ -164,6 +166,7 @@ Initial release.
 - GitHub Actions workflows for CI, self-scan (SARIF upload), and Trusted
   Publishing releases; examples, and full docs.
 
-[Unreleased]: https://github.com/House-lovers7/supabase-rls-guard/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/House-lovers7/supabase-rls-guard/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/House-lovers7/supabase-rls-guard/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/House-lovers7/supabase-rls-guard/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/House-lovers7/supabase-rls-guard/releases/tag/v0.1.0
