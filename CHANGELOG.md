@@ -7,6 +7,16 @@ caveat that, pre-1.0, minor versions may include breaking changes).
 
 ## [Unreleased]
 
+### Added
+
+- **RLS spot-audit service docs** (`docs/service/`): offer, order/intake and
+  report templates, a synthetic sample report (from `examples/unsafe-project`),
+  an operator runbook with a bounded lifecycle (recheck ≤30 days, customer-data
+  deletion ≤37 days after first delivery), and ADR-0001 fixing the boundary
+  that customer material never enters the public repo. Consistency (single
+  offer, price cap, disclaimers, no overstated claims) is pinned by
+  `tests/service-docs.test.ts`.
+
 ### Changed
 
 - **`--strict` now rejects incomplete scans with exit 2.** Operational scan

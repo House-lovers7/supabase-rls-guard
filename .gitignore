@@ -10,3 +10,9 @@ coverage/
 !examples/**/*.sarif
 .env
 .env.*
+
+# Customer audit inputs and private working reports must never enter Git.
+.audit-work/
+audit-work/
+*.zip
+*-private-report.md
