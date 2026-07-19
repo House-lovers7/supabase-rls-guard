@@ -7,6 +7,11 @@ caveat that, pre-1.0, minor versions may include breaking changes).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-20
+
+First release published to npm. 0.1.0 and 0.2.0 were tagged in git but never
+reached the registry, so 0.3.0 is the earliest version installable from npm.
+
 ### Added
 
 - **`examples/README.md`**: every bundled migration (11 unsafe + 3 safe) mapped
@@ -41,8 +46,8 @@ caveat that, pre-1.0, minor versions may include breaking changes).
 
 ## [0.2.0] - 2026-07-12
 
-First published release (v0.2.0 was versioned but never tagged or published;
-this release folds the audit batch below into it).
+Tagged as `v0.2.0` but never published to npm; this section folds the audit
+batch below into it.
 
 Audit batch: 17 bugs found by a multi-agent audit (with adversarial verification
 of every finding) were fixed — see issues #18–#34.
@@ -164,6 +169,7 @@ Initial release.
 - GitHub Actions workflows for CI, self-scan (SARIF upload), and Trusted
   Publishing releases; examples, and full docs.
 
-[Unreleased]: https://github.com/House-lovers7/supabase-rls-guard/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/House-lovers7/supabase-rls-guard/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/House-lovers7/supabase-rls-guard/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/House-lovers7/supabase-rls-guard/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/House-lovers7/supabase-rls-guard/releases/tag/v0.1.0
