@@ -54,11 +54,13 @@ A tiny, zero-DB CLI that statically scans Supabase migration SQL for dangerous R
 
 ## 引継ぎ時の未解決ギャップ
 
+3件の P1 gap は 2026-07-19 に解消済み（下表）。未解決の gap は現在なし。
+
 | Priority | Requirement | 状態・理由 | Evidence |
 |---|---|---|---|
-| P1 | `entrypoints` | partial: entrypoint候補はあるが、利用形態・process・責務を実装pathに結び付けた説明が不足。 | `src/index.ts` |
-| P1 | `migration_readme_drift` | partial: READMEから 14 migrationを確認できない。適用順と必須性をschema正典で確認。 | `examples/unsafe-project/supabase/migrations/001_create_users.sql` |
-| P1 | `rollback` | missing: build/deploy可能だが実行可能なrollback手順がない。生成NFRもrelease前に定義としている。 | `docs/engineering/05_nfr_slo.md` |
+| P1 | `entrypoints` | resolved: CLI + library の公開面・責務・ユースケースを手動検証で明文化。 | `docs/engineering/04_api.md` |
+| P1 | `migration_readme_drift` | resolved: 全14 migration（unsafe 11 + safe 3）の適用順・意図・期待 finding を対応表化。 | `examples/README.md` |
+| P1 | `rollback` | resolved: npm publish 版の実行可能な rollback 手順（deprecate + patch 版）を定義。 | `docs/engineering/05_nfr_slo.md` |
 
 ## スコープ境界
 

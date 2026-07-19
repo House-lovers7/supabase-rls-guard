@@ -312,7 +312,7 @@ This project is independent and not affiliated with or endorsed by Supabase Inc.
 - Detected check: `npm run dev  # tsdown --watch`, `npm run build  # tsdown`, `npm run typecheck  # tsc --noEmit`, `npm run lint  # biome check .`
 - Snapshot: API 0 / entity 9 / screen 0 / test files 10
 - Data sources: `examples/unsafe-project/supabase/migrations/001_create_users.sql`, `examples/unsafe-project/supabase/migrations/002_create_todos.sql`, `examples/unsafe-project/supabase/migrations/010_settings.sql`, `examples/unsafe-project/supabase/migrations/009_grants.sql`, `examples/unsafe-project/supabase/migrations/005_profiles.sql`, `examples/unsafe-project/supabase/migrations/011_legacy.sql`, `examples/unsafe-project/supabase/migrations/004_posts.sql`, `examples/unsafe-project/supabase/migrations/006_api_keys.sql`, `examples/unsafe-project/supabase/migrations/007_admin_flags.sql`, `examples/safe-project/supabase/migrations/001_profiles.sql`
-- Handoff gaps: 3 P0/P1 items — [details](./docs/engineering/00_one_pager.md#引継ぎ時の未解決ギャップ)
+- Handoff gaps: 0 open (3 resolved 2026-07-19) — [details](./docs/engineering/00_one_pager.md#引継ぎ時の未解決ギャップ)
 
 > Generated from the current checkout. Existing ADR/schema/runbook remains authoritative; production state is not asserted.
 <!-- END GENERATED ENGINEERING HANDBOOK -->

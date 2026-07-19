@@ -9,6 +9,11 @@ caveat that, pre-1.0, minor versions may include breaking changes).
 
 ### Added
 
+- **`examples/README.md`**: every bundled migration (11 unsafe + 3 safe) mapped
+  to what it demonstrates and the findings expected against the final folded
+  state; engineering docs gained a hand-verified public-interface inventory
+  (CLI + library entrypoints) and an executable npm rollback procedure,
+  closing all three P1 handoff gaps.
 - **RLS spot-audit service docs** (`docs/service/`): offer, order/intake and
   report templates, a synthetic sample report (from `examples/unsafe-project`),
   an operator runbook with a bounded lifecycle (recheck ≤30 days, customer-data

@@ -35,3 +35,21 @@
 - required config names: example/sourceから未検出
 - 外部integration: Supabase
 - rollbackはcode、schema、generated artifact、provider設定を分ける。production操作は人間承認後に行う。
+
+## Rollback手順（手動検証 2026-07-19）
+
+本プロジェクトの「本番」は npm registry に publish された package のみ
+（常駐サービス・DB なし）。不具合版 `X.Y.Z` を publish してしまった場合:
+
+1. **利用者向けの即時回避**: 前の正常版への固定を案内する
+   （`npm i -D supabase-rls-guard@<prev>` / CI では lockfile を revert）。
+2. **不具合版の隔離**: `npm deprecate supabase-rls-guard@X.Y.Z "<理由と代替版>"`
+   を実行する（external_send のため人間承認後）。unpublish は registry 側の
+   期間・条件制限があるため前提にしない。
+3. **修正版の提供**: `git revert` で原因 commit を戻し、patch 版 `X.Y.(Z+1)` を
+   通常の release workflow（audit → typecheck → lint → build → test →
+   validate:package → publish）で出す。
+4. **記録**: CHANGELOG に不具合版・影響・修正版を記載する。
+
+CLI はステートレスなので、利用者側は package 版数を戻す以外の復旧作業を
+必要としない（スキーマ・データの rollback は存在しない）。
