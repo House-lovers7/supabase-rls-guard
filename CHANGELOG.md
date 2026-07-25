@@ -44,6 +44,15 @@ reached the registry, so 0.3.0 is the earliest version installable from npm.
   gate both CI and the release workflow; PRs touching dependencies run a pinned
   `dependency-review` action; pnpm bumped to 11.x.
 
+### Fixed
+
+- **The binary no longer misreports its own version.** `src/version.ts` was
+  still pinned to `0.2.0` after the 0.3.0 bump, so `--version`, the
+  `--list-rules` header and every SARIF report's `tool.driver.version` claimed
+  0.2.0. `tests/version.test.ts` now fails the build whenever `VERSION` and
+  `package.json` drift apart, and `docs/releasing.md` names both files in the
+  bump step.
+
 ## [0.2.0] - 2026-07-12
 
 Tagged as `v0.2.0` but never published to npm; this section folds the audit

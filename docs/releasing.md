@@ -42,8 +42,13 @@ is manual, once:
 
 ## Normal release (after bootstrap)
 
-1. Bump `version` in `package.json`, move the `[Unreleased]` CHANGELOG section
-   under the new version, land it on `main` via PR.
+1. Bump `version` in `package.json` **and `src/version.ts`**, move the
+   `[Unreleased]` CHANGELOG section under the new version, land it on `main`
+   via PR. `VERSION` is bundled into `dist/` and into every SARIF report as
+   `tool.driver.version`, so bumping only `package.json` ships a build that
+   misreports itself — `tests/version.test.ts` fails the build when the two
+   drift (this is how 0.3.0 shipped as `v0.2.0` in `--version` until
+   2026-07-26).
 2. Create and **publish a GitHub Release** with tag `vX.Y.Z` on that commit.
 3. `release.yml` runs all gates and `npm publish` authenticates via OIDC — no
    `NPM_TOKEN` secret. Provenance attestations are generated automatically
