@@ -243,7 +243,10 @@ root. All fields are optional:
 
 ```jsonc
 {
-  // schemas exposed over the Data API (default: ["public"])
+  // schemas exposed over the Data API (default: ["public"]).
+  // RLS001/RLS004/RLS005 assume these are served by PostgREST — if you use
+  // Supabase only for auth, or reach the database through your own API,
+  // set this to what the Data API actually serves ([] if none of it is).
   "exposedSchemas": ["public"],
   // tables that are intentionally world-readable (suppresses RLS001/RLS006)
   "publicTables": ["public.blog_posts"],
@@ -295,7 +298,7 @@ same class of checks left, to before you ship.
 - It does **not** connect to your database, and never needs your keys.
 - It is a static approximation of the live Splinter linter, not a substitute for it.
 - It does not claim complete security coverage — it catches the common, costly mistakes.
-- It does not parse every valid PostgreSQL construct (dynamically-generated SQL in `DO` blocks is out of scope).
+- It does not parse every valid PostgreSQL construct: SQL generated at run time inside `DO` blocks is out of scope, and a scan that meets one says so instead of guessing (scan warning; `--strict` exits 2).
 
 ## License
 

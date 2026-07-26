@@ -1,6 +1,6 @@
 # ADR-0002: 動的 DDL を含むスキャンの扱いと、露出前提の可視化
 
-- 状態: 提案（実装は採否確定後）
+- 状態: 採用（2026-07-26 実装済み・次の minor で出荷）
 - 日付: 2026-07-26
 
 ## 文脈
@@ -71,9 +71,25 @@ Supabase Auth のみ利用でデータが別 DB にある構成、サーバ API 
   scan warning の発生と `--strict` の exit 2 を回帰テストで固定する。
   ADR-0001 の境界に従い、実プロジェクト由来の SQL・プロジェクト名は本リポジトリへ持ち込まない。
 
+## 実装（2026-07-26）
+
+| 決定 | 実装 |
+| --- | --- |
+| 1. 動的 DDL → scan warning | `src/parser/splitter.ts` の1パス走査を `lexSql()` へ拡張して dollar-quoted body の範囲を返し、`src/parser/dynamic-ddl.ts` がその中の RLS DDL を検出。`src/core/scan.ts` が **raw テキストに対して**呼ぶため libpg / regex どちらのバックエンドでも同じ結果になる。ファイルにつき1件 |
+| 2. 露出前提のヒント | `ScanResult.hints`（新規）に1件生成し、text（サマリ下の dim 行）と json が描画。sarif / github は変更なし |
+| 検証 | `examples/dynamic-ddl-project`（合成）を追加。scan warning・`--strict` の exit 2・hints の有無を `tests/scan.test.ts` / `tests/cli.test.ts` で固定（143 tests） |
+
+### 未解決だった「ヒントの出力先」の決着
+
+**`warnings[]` へは混ぜず、`hints[]` を新設した。** `warnings[]` は `--strict` で
+exit 2 を引き起こす（`src/cli.ts`）ため、そこへ助言を入れると設定の案内だけで CI が落ち、
+「不完全スキャン」という warning の意味も薄まる。ヒントは exit code に一切影響しない。
+
+sarif / github へ出さないのは、どちらも finding を位置つきの結果へ写像する形式であり、
+位置を持たないスキャン全体への助言を載せると結果の意味が変わるため。JSON 利用者は
+`hints[]` を読める。
+
 ## 未解決
 
-- ヒント行を text 以外（json / sarif）へどう出すか。`warnings[]` に混ぜると
-  「不完全スキャン」の意味が薄まるため、別フィールドが要るかもしれない。
 - 実露出の確認（anon キーでの実 API アクセス）はツールの範囲外であり、
   運用側の boundary evidence として残す。

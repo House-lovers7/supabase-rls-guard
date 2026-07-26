@@ -40,8 +40,13 @@ These are out of scope or tracked as open issues — contributions welcome.
   won't find it (fails conservative — existing findings are kept).
 - **`CREATE TABLE AS`** — the resulting column list is unknown, so column-level
   rules can't inspect it.
-- **Dynamically generated SQL** — policies created inside `DO $$ … EXECUTE … $$`
-  blocks are not analyzable.
+- **Dynamically generated SQL** — RLS enabled or policies created inside
+  `DO $$ … EXECUTE … $$` blocks are not analyzable; their target list often only
+  exists at run time (`SELECT tablename FROM pg_tables`). The scan **says so**:
+  finding such a block emits a scan warning, which makes the run incomplete (see
+  [Parser fallback](#parser-fallback) — no clean `✔`, and `--strict` exits 2).
+  Findings for the affected tables are still reported, because a block that
+  secures all of them and one that misses yours look identical from here.
 - **Anything requiring a live database** — index usage, table bloat, extension
   versions, multiple-permissive-policy *performance*, and other Splinter lints
   that query the running catalog/stats.
@@ -58,9 +63,13 @@ hatches below.
 - **Public definer views.** `RLS010` flags every public view lacking
   `security_invoker`; if a view is intentionally a public projection, downgrade
   it with a per-rule `severity` override or the allowlist.
-- **Exposed-schema assumption.** It assumes the `public` schema is API-exposed
-  (the Supabase default). If you expose/hide schemas differently, set
-  `exposedSchemas` — otherwise non-exposed tables may be flagged.
+- **Exposed-schema assumption.** RLS001, RLS004 and RLS005 all say "reachable
+  with the anon key", which holds only if PostgREST serves `exposedSchemas`
+  (default `["public"]`). Use Supabase for auth while the data lives in another
+  database, or front the database with your own API, and the premise fails —
+  every unprotected table is then a false critical. Set `exposedSchemas` to what
+  the Data API actually serves (`[]` if none of it is). Reports containing those
+  rules print a reminder to this effect.
 
 ## Parser fallback
 
@@ -70,10 +79,15 @@ resilient but less precise and may miss policies written in unusual syntax. You
 can force a backend with `--backend libpg|regex`.
 
 A scan that produced such warnings (parser fallback, skipped unreadable entry,
-invalid config field) is **incomplete**: it analyzed less than what you asked
-for. Without `--strict` the text reporter still refuses to render it as a clean
-`✔` pass; with `--strict` the CLI exits 2 (tool error, distinct from exit 1
-findings) so CI cannot silently accept a partial analysis.
+invalid config field, RLS DDL inside a dollar-quoted block) is **incomplete**:
+it analyzed less than what you asked for. Without `--strict` the text reporter
+still refuses to render it as a clean `✔` pass; with `--strict` the CLI exits 2
+(tool error, distinct from exit 1 findings) so CI cannot silently accept a
+partial analysis.
+
+Hints are a separate channel (`hints` in JSON output, a dim line under the text
+summary). They explain the assumptions the findings rest on and never affect the
+exit code — advice must not fail a build.
 
 ## Tuning
 

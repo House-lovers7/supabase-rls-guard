@@ -7,6 +7,35 @@ caveat that, pre-1.0, minor versions may include breaking changes).
 
 ## [Unreleased]
 
+Both entries below come from running 0.3.0 across seven real projects (8 paths,
+70 files): of 109 criticals, 36 were real. The other 73 were not detection bugs
+but unstated premises, and the tool gave no sign of either. See
+`docs/03_adrs/ADR-0002-dynamic-ddl-and-exposure-premise.md`.
+
+### Added
+
+- **Exposure-premise hint.** A report containing RLS001, RLS004 or RLS005 now
+  ends with a line naming the configured `exposedSchemas` and how to change it,
+  for setups where PostgREST does not serve them (Supabase Auth with the data in
+  another database, or access only through your own API). It surfaces as a new
+  `hints[]` array in JSON output and a dim line under the text summary;
+  `hints` never affect the exit code. SARIF and GitHub annotations are unchanged.
+- **`examples/dynamic-ddl-project`**: a synthetic migration that enables RLS from
+  a `DO $$ … EXECUTE format(…) … $$` loop, pinning the behaviour below.
+
+### Changed
+
+- **RLS DDL generated inside a dollar-quoted block now makes the scan
+  incomplete.** `ENABLE`/`DISABLE ROW LEVEL SECURITY` and `CREATE`/`DROP POLICY`
+  inside `$$ … $$` are produced at run time — often over a `pg_tables` query — so
+  a static fold cannot know which tables they touch. Finding one emits a scan
+  warning, which joins the 0.3.0 incomplete-scan contract: no green `✔`, and
+  **`--strict` now exits 2 (tool error) on repositories that use this pattern**,
+  where it previously exited 0 or 1. Findings for the affected tables are
+  deliberately *not* suppressed: a block that secures every table and one that
+  misses yours are indistinguishable statically, and hiding a real gap is the
+  worse failure.
+
 ## [0.3.0] - 2026-07-20
 
 First release published to npm. 0.1.0 and 0.2.0 were tagged in git but never
