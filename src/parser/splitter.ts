@@ -14,10 +14,30 @@ export interface RawStatement {
   offset: number
 }
 
+/** The inside of one `$$ … $$` / `$tag$ … $tag$` body, excluding both tags. */
+export interface DollarBody {
+  /** Offset of the first character after the opening tag. */
+  start: number
+  /** Offset of the closing tag (or end of file when the body is unterminated). */
+  end: number
+}
+
+export interface LexResult {
+  statements: RawStatement[]
+  dollarBodies: DollarBody[]
+}
+
 const DOLLAR_OPEN = /^\$([A-Za-z_]\w*)?\$/
 
-export function splitStatements(content: string): RawStatement[] {
+/**
+ * Single-pass lex of a SQL file. Splits statements *and* records the extent of
+ * every dollar-quoted body, so callers that care about what lives inside
+ * `DO $$ … $$` (which is opaque to static analysis) don't have to re-implement
+ * the same comment/quote state machine.
+ */
+export function lexSql(content: string): LexResult {
   const result: RawStatement[] = []
+  const dollarBodies: DollarBody[] = []
   const n = content.length
   let i = 0
   let stmtStart = 0
@@ -25,6 +45,7 @@ export function splitStatements(content: string): RawStatement[] {
   let inLineComment = false
   let inBlockComment = false
   let dollarTag: string | null = null
+  let dollarBodyStart = 0
 
   const push = (end: number) => {
     const text = content.slice(stmtStart, end)
@@ -62,6 +83,7 @@ export function splitStatements(content: string): RawStatement[] {
     }
     if (dollarTag) {
       if (c === '$' && content.startsWith(dollarTag, i)) {
+        dollarBodies.push({ start: dollarBodyStart, end: i })
         i += dollarTag.length
         dollarTag = null
         continue
@@ -90,6 +112,7 @@ export function splitStatements(content: string): RawStatement[] {
       if (m) {
         dollarTag = m[0]
         i += m[0].length
+        dollarBodyStart = i
         continue
       }
       i++
@@ -104,6 +127,13 @@ export function splitStatements(content: string): RawStatement[] {
     i++
   }
 
+  // An unterminated body still hides everything after the opening tag.
+  if (dollarTag) dollarBodies.push({ start: dollarBodyStart, end: n })
+
   push(n)
-  return result
+  return { statements: result, dollarBodies }
+}
+
+export function splitStatements(content: string): RawStatement[] {
+  return lexSql(content).statements
 }
