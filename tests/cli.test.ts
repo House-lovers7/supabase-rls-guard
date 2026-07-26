@@ -36,6 +36,10 @@ describe.skipIf(!existsSync(CLI))('CLI (built binary)', () => {
 
     // Incomplete analysis (exit 2) outranks the critical findings (exit 1).
     expect(run([DYNAMIC, '--strict']).status).toBe(2)
+
+    const json = JSON.parse(run([DYNAMIC, '--format', 'json']).stdout)
+    expect(json.warnings[0]).toContain('dollar-quoted block')
+    expect(json.hints[0]).toContain('exposedSchemas')
   })
 
   it('#32 invalid flag values exit 2 (documented tool-error code)', () => {

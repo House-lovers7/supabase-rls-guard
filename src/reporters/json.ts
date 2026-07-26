@@ -6,6 +6,7 @@ export function renderJson(result: ScanResult): string {
       summary: result.summary,
       findings: result.findings,
       warnings: result.warnings,
+      hints: result.hints,
     },
     null,
     2,

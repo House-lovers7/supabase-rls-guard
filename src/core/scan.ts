@@ -47,6 +47,25 @@ function summarize(findings: Finding[], filesScanned: number, config: ResolvedCo
   return summary
 }
 
+/** Rules that only make sense if the schema is actually served over PostgREST. */
+const EXPOSURE_DEPENDENT_RULES = new Set(['RLS001', 'RLS004', 'RLS005'])
+
+/**
+ * Every "this table is reachable with the anon key" finding rests on one
+ * premise: that `exposedSchemas` is what the API serves. Projects that use
+ * Supabase only for auth and keep data elsewhere, or that front the database
+ * with their own API, break that premise — and in the 2026-07-26 sweep they
+ * accounted for 33 of the 73 false criticals. The escape hatch already existed;
+ * what was missing was any sign of it at the point the criticals are read.
+ */
+function exposurePremiseHint(findings: Finding[], config: ResolvedConfig): string[] {
+  if (!findings.some((f) => EXPOSURE_DEPENDENT_RULES.has(f.ruleId))) return []
+  const schemas = config.exposedSchemas.map((s) => `"${s}"`).join(', ')
+  return [
+    `RLS001/RLS004/RLS005 assume PostgREST serves ${schemas || 'no schemas'}. If this database is not exposed that way — Supabase Auth with the data in another database, or access only through your own API — set "exposedSchemas" in your config to match and rescan.`,
+  ]
+}
+
 /**
  * Scan migrations and return findings.
  *
@@ -82,5 +101,11 @@ export async function scan(options: ScanOptions): Promise<ScanResult> {
     })
     .sort(compareFindings)
 
-  return { findings, summary: summarize(findings, files.length, config), config, warnings }
+  return {
+    findings,
+    summary: summarize(findings, files.length, config),
+    config,
+    warnings,
+    hints: exposurePremiseHint(findings, config),
+  }
 }

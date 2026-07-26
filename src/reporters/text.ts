@@ -70,5 +70,7 @@ export function renderText(result: ScanResult, enableColor = true): string {
     }${scanWarningSuffix}`,
   )
 
+  for (const hint of result.hints) lines.push(c.dim(`  ${hint}`))
+
   return lines.join('\n')
 }

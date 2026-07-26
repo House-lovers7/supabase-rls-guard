@@ -69,6 +69,35 @@ describe('scan integration', () => {
     }
   })
 
+  it('spells out the exposure premise behind RLS001/004/005', async () => {
+    const result = await scan({ path: UNSAFE })
+
+    expect(result.hints).toHaveLength(1)
+    expect(result.hints[0]).toContain('exposedSchemas')
+    expect(result.hints[0]).toContain('"public"')
+    expect(render(result, 'text', { color: false })).toContain('exposedSchemas')
+    // A hint is advice, not an incomplete scan: it must not push --strict to 2.
+    expect(result.warnings).toHaveLength(0)
+  })
+
+  it('follows the configured schemas, and stays silent without those rules', async () => {
+    await withTmpDir(async (dir) => {
+      await writeFile(join(dir, '.rlsguardrc.json'), '{"exposedSchemas":["api"]}\n')
+      await writeFile(join(dir, '001.sql'), 'create table api.t (id int, secret text);\n')
+      const result = await scan({ path: dir, cwd: dir, configPath: join(dir, '.rlsguardrc.json') })
+
+      expect(result.hints[0]).toContain('"api"')
+    })
+
+    // Taking the exposure-dependent rules out leaves the hint nothing to
+    // explain, even though other findings remain.
+    const disabled = await scan({ path: UNSAFE, disableRules: ['RLS001', 'RLS004', 'RLS005'] })
+    expect(disabled.findings.length).toBeGreaterThan(0)
+    expect(disabled.hints).toHaveLength(0)
+
+    expect((await scan({ path: SAFE })).hints).toHaveLength(0)
+  })
+
   it('does not warn about policy DDL outside a dollar-quoted body', async () => {
     const result = await scan({ path: UNSAFE })
     expect(dynamicDdlWarnings(result.warnings)).toHaveLength(0)

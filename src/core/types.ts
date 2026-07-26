@@ -346,4 +346,11 @@ export interface ScanResult {
    * The CLI treats any of these as an incomplete-scan tool error under `--strict`.
    */
   warnings: string[]
+  /**
+   * Advice about the assumptions behind the findings above — how to reconfigure
+   * the scan when they don't hold for your setup. Deliberately kept out of
+   * {@link ScanResult.warnings}: a hint must never fail a build, and it says
+   * nothing about whether the scan was complete.
+   */
+  hints: string[]
 }
