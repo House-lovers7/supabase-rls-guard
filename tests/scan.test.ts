@@ -17,6 +17,11 @@ async function withTmpDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
 
 const UNSAFE = 'examples/unsafe-project/supabase/migrations'
 const SAFE = 'examples/safe-project/supabase/migrations'
+const DYNAMIC = 'examples/dynamic-ddl-project/supabase/migrations'
+
+function dynamicDdlWarnings(warnings: string[]): string[] {
+  return warnings.filter((w) => w.includes('dollar-quoted block'))
+}
 
 describe('scan integration', () => {
   it('fails on the unsafe example project', async () => {
@@ -43,6 +48,33 @@ describe('scan integration', () => {
       expect(output).toContain('scan warning')
       expect(output).not.toContain('✔ No RLS issues')
     })
+  })
+
+  it('warns that RLS DDL generated inside a DO block was not analyzable', async () => {
+    const result = await scan({ path: DYNAMIC })
+    const warnings = dynamicDdlWarnings(result.warnings)
+
+    expect(warnings).toHaveLength(1)
+    expect(warnings[0]).toContain('001_dynamic_rls.sql:24')
+    // The blind spot is reported, not papered over: the tables the block
+    // secures are still flagged, because a block that misses one looks the same.
+    expect(result.findings.filter((f) => f.ruleId === 'RLS001')).toHaveLength(2)
+    expect(render(result, 'text', { color: false })).toContain('scan incomplete')
+  })
+
+  it('reports the same blind spot on both parser backends', async () => {
+    for (const backend of ['libpg', 'regex'] as const) {
+      const result = await scan({ path: DYNAMIC, backend })
+      expect(dynamicDdlWarnings(result.warnings)).toHaveLength(1)
+    }
+  })
+
+  it('does not warn about policy DDL outside a dollar-quoted body', async () => {
+    const result = await scan({ path: UNSAFE })
+    expect(dynamicDdlWarnings(result.warnings)).toHaveLength(0)
+    // …nor about a dollar-quoted body that holds no RLS DDL (safe-project's
+    // SECURITY DEFINER function).
+    expect(dynamicDdlWarnings((await scan({ path: SAFE })).warnings)).toHaveLength(0)
   })
 
   it('does not flag a table whose RLS is enabled in a later migration', async () => {

@@ -15,6 +15,7 @@ import { describe, expect, it } from 'vitest'
 const CLI = resolve('dist/cli.mjs')
 const SAFE = 'examples/safe-project/supabase/migrations'
 const UNSAFE = 'examples/unsafe-project/supabase/migrations'
+const DYNAMIC = 'examples/dynamic-ddl-project/supabase/migrations'
 
 function run(args: string[]): { status: number | null; stdout: string; stderr: string } {
   const r = spawnSync(process.execPath, [CLI, ...args], { encoding: 'utf8' })
@@ -25,6 +26,16 @@ describe.skipIf(!existsSync(CLI))('CLI (built binary)', () => {
   it('exit 0 on the safe example, 1 on the unsafe example', () => {
     expect(run([SAFE]).status).toBe(0)
     expect(run([UNSAFE]).status).toBe(1)
+  })
+
+  it('generated RLS DDL downgrades a finding-only failure to an incomplete scan', () => {
+    const permissive = run([DYNAMIC, '--no-color'])
+    expect(permissive.status).toBe(1)
+    expect(permissive.stdout).toContain('scan incomplete')
+    expect(permissive.stderr).toContain('dollar-quoted block')
+
+    // Incomplete analysis (exit 2) outranks the critical findings (exit 1).
+    expect(run([DYNAMIC, '--strict']).status).toBe(2)
   })
 
   it('#32 invalid flag values exit 2 (documented tool-error code)', () => {

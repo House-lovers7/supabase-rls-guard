@@ -1,5 +1,6 @@
 import { type ConfigOverrides, loadConfig } from '../config/load.js'
 import { type FileSuppressions, isSuppressed, parseSuppressions } from '../config/suppressions.js'
+import { detectDynamicRlsDdl } from '../parser/dynamic-ddl.js'
 import { type BackendChoice, parseSql } from '../parser/index.js'
 import { evaluateRules } from '../rules/registry.js'
 import { discover } from './discover.js'
@@ -68,6 +69,8 @@ export async function scan(options: ScanOptions): Promise<ScanResult> {
     allStatements.push(...parsed.statements)
     suppressions.set(file.rel, parseSuppressions(file.content))
     for (const err of parsed.errors) warnings.push(`${err.file}: ${err.message}`)
+    // Runs on the raw text, so both backends report the same blind spot.
+    warnings.push(...detectDynamicRlsDdl(file.content, file.rel))
   }
 
   const state = foldStatements(allStatements, config.exposedSchemas)

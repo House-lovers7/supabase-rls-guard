@@ -1,11 +1,12 @@
 # Examples
 
-Two self-contained Supabase projects used by the README, the demo, and the
+Three self-contained Supabase projects used by the README, the demo, and the
 test-suite. Scan them yourself (from the repo root, after `pnpm build`):
 
 ```sh
-node dist/cli.mjs examples/unsafe-project/supabase/migrations   # exit 1
-node dist/cli.mjs examples/safe-project/supabase/migrations     # exit 0
+node dist/cli.mjs examples/unsafe-project/supabase/migrations        # exit 1
+node dist/cli.mjs examples/safe-project/supabase/migrations          # exit 0
+node dist/cli.mjs examples/dynamic-ddl-project/supabase/migrations   # exit 1, scan incomplete
 ```
 
 Migrations are applied in filename order, and the scanner folds all of them
@@ -40,5 +41,19 @@ Expected result: `✔ No RLS issues found across 3 file(s).` (exit 0)
 | `002_profiles_policies.sql` | One policy per operation, role-scoped (`TO authenticated`), `auth.uid()` wrapped in a subquery, `WITH CHECK` on writes |
 | `003_function.sql` | `SECURITY DEFINER` function with a fixed, empty `search_path` |
 
-When adding a migration to either project, keep this table in sync and adjust
-the expected totals here and in the affected tests.
+## dynamic-ddl-project — 1 migration, deliberately not analyzable
+
+Expected result: **3 critical** plus **1 scan warning** (exit 1; `--strict`
+exits 2 because the scan is incomplete, not because of the findings).
+
+| Migration | Demonstrates | Findings against the final state |
+| --- | --- | --- |
+| `001_dynamic_rls.sql` | RLS enabled by `DO $$ … EXECUTE format(…) … $$` over a catalog query, which a static fold cannot follow | RLS001 ×2 (critical), RLS004 (critical `share_token`) — **plus a scan warning** naming the block |
+
+The findings here are the honest answer, not a bug: a block that secures every
+table and a block that misses one are indistinguishable without running it. The
+warning says so out loud instead of presenting the criticals as certain. See
+`docs/03_adrs/ADR-0002-dynamic-ddl-and-exposure-premise.md`.
+
+When adding a migration to any of these projects, keep this table in sync and
+adjust the expected totals here and in the affected tests.
