@@ -61,7 +61,7 @@
   },
   "dependencies": {
     "citty": "^0.2.2",
-    "cosmiconfig": "^9.0.2",
+    "cosmiconfig": "^10.0.0",
     "libpg-query": "^17.7.3",
     "picocolors": "^1.1.1"
   },
