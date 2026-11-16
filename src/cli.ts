@@ -23,9 +23,17 @@ function write(stream: NodeJS.WriteStream, text: string): Promise<void> {
   })
 }
 
-async function fail(code: number, message: string): Promise<never> {
+/**
+ * Report a tool error and set the exit code. Callers `return` right after it:
+ * the CLI never calls `process.exit()`, because exiting while V8 background
+ * compile threads are still running can deadlock node's shutdown (the main
+ * thread joins a worker that waits for the main thread to GC) and leave the
+ * process idle forever after the output was written. Returning lets the event
+ * loop drain and node tear down the isolate before the platform threads.
+ */
+async function fail(code: number, message: string): Promise<void> {
   await write(process.stderr, `error: ${message}\n`)
-  process.exit(code)
+  process.exitCode = code
 }
 
 function printRules(): void {
@@ -101,15 +109,15 @@ const main = defineCommand({
 
     const format = String(args.format)
     if (!FORMATS.includes(format)) {
-      await fail(2, `invalid --format "${format}" (expected one of: ${FORMATS.join(', ')})`)
+      return fail(2, `invalid --format "${format}" (expected one of: ${FORMATS.join(', ')})`)
     }
     const backend = String(args.backend)
     if (!BACKENDS.includes(backend)) {
-      await fail(2, `invalid --backend "${backend}" (expected one of: ${BACKENDS.join(', ')})`)
+      return fail(2, `invalid --backend "${backend}" (expected one of: ${BACKENDS.join(', ')})`)
     }
     const failOnRaw = args['fail-on']
     if (failOnRaw !== undefined && !SEVERITIES.includes(String(failOnRaw))) {
-      await fail(2, `invalid --fail-on "${failOnRaw}" (expected one of: ${SEVERITIES.join(', ')})`)
+      return fail(2, `invalid --fail-on "${failOnRaw}" (expected one of: ${SEVERITIES.join(', ')})`)
     }
 
     const disableRules =
@@ -133,7 +141,7 @@ const main = defineCommand({
       // A zero-file scan is a misconfigured path, not a clean pass — fail closed.
       // (Not silenced by --quiet: a security gate must not pass silently on nothing.)
       if (result.summary.filesScanned === 0 && !args['allow-empty']) {
-        await fail(
+        return fail(
           2,
           `no .sql files found at "${args.path}" — nothing was scanned (use --allow-empty to permit this)`,
         )
@@ -152,7 +160,7 @@ const main = defineCommand({
       // so CI and operators still have evidence to review.
       if (args.strict && result.warnings.length > 0) {
         const count = result.warnings.length
-        await fail(
+        return fail(
           2,
           `strict mode rejected ${count} scan warning${count === 1 ? '' : 's'}; the result is incomplete${
             args.quiet ? ' (rerun without --quiet for details)' : ''
@@ -160,9 +168,9 @@ const main = defineCommand({
         )
       }
 
-      process.exit(result.summary.failed ? 1 : 0)
+      process.exitCode = result.summary.failed ? 1 : 0
     } catch (err) {
-      await fail(2, err instanceof Error ? err.message : String(err))
+      return fail(2, err instanceof Error ? err.message : String(err))
     }
   },
 })
